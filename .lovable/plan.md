@@ -1,71 +1,67 @@
-## Correctifs à appliquer dans `test_v6.html` → livré comme `test_v7.html`
 
-Tout reste 100 % côté navigateur, un seul fichier HTML. Le logo joint est intégré en base64 dans le fichier (aucune dépendance externe).
+## Correctifs `test_v7.html` → `test_v8.html`
 
-### 1. Confidentialité — initiales du patient après import PDF
-Quand un nom est extrait du PDF, le champ « Nom » n'est plus pré-rempli avec le nom complet. À la place :
-- Stocker le nom complet uniquement en mémoire (variable JS, jamais affichée).
-- Pré-remplir le champ « Nom » avec les **initiales** uniquement (ex. « Guillaume Page » → `G. P.`).
-- Sur le résumé imprimé : afficher seulement les initiales également.
+Toujours un seul fichier HTML autonome, 100 % côté navigateur. Logo VacciCheck (image jointe) intégré en base64.
 
-### 2. Long séjour automatique si durée > 1 mois
-Dans `syncTravel()` (et au changement de `departureDate` / `returnDate` / `tripDuration`) : si durée calculée > 30 jours, cocher automatiquement l'option « Long séjour ». L'utilisateur peut toujours la décocher manuellement.
+### 1. Volume (ml) + mention « junior / demi-dose » — réparation
+Le code v7 capturait `doseVolume` mais l'affichage de la ligne vaccinale ne l'imprimait pas (oubli dans le template). Correctifs :
+- Dans la regex de parsing du carnet québécois, élargir la capture du volume : accepter `0,5 ml`, `0.5 ml`, `1 ml`, `1,0 ml`, `1.0 ml` (la virgule décimale française n'était pas reconnue).
+- Ajouter le volume **systématiquement** dans le libellé affiché : `Hépatite A — HAVRIX — 0,5 ml`.
+- Règles demi-dose (étiquette ajoutée à droite du volume) :
+  - Havrix 0,5 ml → `(junior / demi-dose)`
+  - Engerix-B 0,5 ml → `(demi-dose)`
+  - Recombivax HB 0,5 ml → `(demi-dose)`
+- Si le volume n'est pas trouvé dans le PDF, afficher `— ml non précisé` au lieu de masquer.
+- Même affichage dans le résumé imprimé et dans la table d'historique.
 
-### 3. Volume (ml) et demi-dose dans l'extraction PDF
-- Étendre `extractPdfLines` / `parseQuebecCarnet` pour capturer le volume (`0.5 ml`, `1.0 ml`, `1 ml`) présent sur la ligne de dose du carnet québécois.
-- Règles demi-dose :
-  - **Havrix 0.5 ml** → marquer « Junior / demi-dose »
-  - **Engerix-B 0.5 ml** et **Recombivax HB 0.5 ml** → marquer « demi-dose »
-- Affichage dans la ligne vaccinale : `Hépatite A (HA – HAVRIX – 0.5 ml — junior/demi-dose)`.
-- Champ `doseVolume` ajouté à chaque entrée pour usage ultérieur.
-
-### 4. Section « Contact avec la population locale » dans le questionnaire clinique
-Ajouter une nouvelle section (mêmes intitulés que JotForm MSSS) avec choix :
-- Aucun / très limité (hôtels, visites touristiques)
-- Occasionnel (marchés, transports en commun)
-- Étroit et prolongé (famille, bénévolat, travail humanitaire, soins, écoles)
-
-Cette valeur influence ensuite Hépatite A, Hépatite B, Méningocoque, Rage et Tuberculose dans `recommendationFromJotform`.
-
-### 5. Séparer « Diarrhée du voyageur » et « Choléra »
-- Conserver un seul vaccin sous-jacent (Dukoral) mais deux lignes distinctes dans la table des recommandations.
-- Logique :
-  - **Diarrhée du voyageur** : rappel **tous les 3 mois** si exposition continue.
-  - **Choléra** : rappel **tous les 2 ans** (adulte) / **6 mois** (enfant 2-5 ans), seulement si zone endémique + contact étroit + accès limité à eau potable.
-- Statut et texte de rappel calculés indépendamment à partir des réponses cliniques.
-
-### 6. Rage — descriptifs des groupes A / B / C
-Ajouter dans la section Rage du questionnaire un sélecteur **Groupe d'exposition** avec descriptifs complets (textes intégraux fournis par l'utilisateur) :
-- **Groupe A** : Chauves-souris (spéléologie, vétérinaire à l'étranger, …)
-- **Groupe B** : Mammifères sauvages (vétérinaire, activités extérieures, séjour prolongé, jeunes enfants, …)
-- **Groupe C** : Mammifères domestiques + tout B + promenades en ville/village/campagne
-
-Le groupe sélectionné influence le statut Rage (A/B → Recommandée, C → Recommandée si séjour prolongé ou enfant).
-
-### 7. Renommage de la catégorie « Accès à l'eau potable restreint / achlorhydrie »
-**Question pour l'utilisateur ci-dessous** — j'ai besoin du nouveau libellé exact.
-
-### 8. Âge à la réception — calcul exact
-Réécrire `ageRe` parsing : au lieu de prendre le texte `(X an Y mois)` du PDF (souvent absent ou approximatif), calculer dynamiquement à partir de `dob` (date de naissance du patient) et de la date de la dose :
+### 2. Réorganisation de la mise en page
+Passer en grille deux colonnes sur écran ≥ 1100 px :
+```text
+┌──────────────────────────┬──────────────────────────┐
+│  Carnet de vaccination   │  Patient et voyage       │
+│  (import PDF)            │  Pays de destination     │
+│                          │  Questionnaire clinique  │
+├──────────────────────────┴──────────────────────────┤
+│  Résultats / Recommandations (pleine largeur)       │
+└─────────────────────────────────────────────────────┘
 ```
-ageAt = floor((doseDate - dob)/year) ans + mois résiduels
-```
-Format affiché : `4 ans 7 mois` (ou `8 mois` si < 1 an). Recalculé automatiquement si `dob` est modifié après import.
+- Sur mobile (< 1100 px) : empilement vertical, ordre = Carnet → Patient/voyage → Questionnaire → Résultats.
+- Les sections Patient/voyage, Pays, Questionnaire clinique restent visibles dès l'ouverture de la page, plus besoin de scroller après import.
 
-### 9. Renommer le site « VacciCheck » + logo
-- Changer `<title>` et l'en-tête H1 visible en **VacciCheck**.
-- Intégrer le logo (image fournie) en base64 dans le HTML, affiché à gauche du titre (hauteur ~48 px), et également en haut du résumé imprimé.
+### 3. Ordre des initiales (prénom d'abord)
+Corriger `extractInitials()` : actuellement on prend `lastName[0] + firstName[0]` (ordre du PDF québécois `NOM, Prénom`). Inverser → `firstName[0] + ". " + lastName[0] + "."` → `G. P.` pour « Guillaume Page ». S'applique au champ initiales, au résumé imprimé, et au header de la fiche.
 
-### 10. Déplacer la carte « Carnet de vaccination » avant « Patient et voyage »
-Réordonner les `<section>` dans le HTML : Carnet de vaccination (import PDF) devient la **première carte**, puisqu'elle pré-remplit nom, DOB et doses.
+### 4. Restaurer les deux sous-groupes de « Eau et alimentation à risque »
+La case unique cochable est remplacée par **deux cases distinctes** (l'une OU l'autre suffit à activer la recommandation Hépatite A / Typhoïde / Choléra renforcée) :
+
+- **Sous-groupe A — Conditions sanitaires inadéquates** : « N'aura pas accès à de l'eau potable ET sera en contact étroit avec une population indigente isolée des ressources médicales (coopérants, personnel de la santé, personnel humanitaire en zones sinistrées / camps de réfugiés, etc.) »
+- **Sous-groupe B — Mécanismes de défense gastrique amoindris** : « Achlorhydrie, gastrectomie, vagotomie, thérapie continue aux IPP (oméprazole, lansoprazole) ou aux anti-H2 (cimétidine, famotidine, ranitidine) »
+
+Logique : `eauEtAlimentationRisque = sousGroupeA || sousGroupeB`. Le résumé imprimé liste lequel des deux est coché.
+
+### 5. Redesign avec la palette du logo VacciCheck
+Palette extraite du logo :
+- Bleu principal : `#1E64B8` (V du logo)
+- Vert principal : `#39A845` (Check du logo)
+- Cyan/teal accent : `#2DBFD4` (seringue)
+- Fond : `#F7FAFC` (off-white)
+- Texte : `#0F2747` (bleu nuit)
+
+Changements visuels :
+- En-tête : bande dégradée `linear-gradient(135deg, #1E64B8 0%, #2DBFD4 50%, #39A845 100%)` avec logo (hauteur 56 px) à gauche et titre **VacciCheck** en blanc.
+- Cartes : fond blanc, bordure `1px solid #E3EAF2`, ombre douce, coin arrondi 12 px, titre de carte sur bande bleue claire `#E8F1FB` avec barre verticale verte `#39A845` à gauche.
+- Boutons primaires : bleu `#1E64B8`, hover bleu foncé ; boutons secondaires : contour vert `#39A845`.
+- Badges de statut vaccinal :
+  - À jour → fond vert pâle `#E6F4E8`, texte `#1F7A2A`
+  - Rappel requis → fond ambre `#FFF4E0`, texte `#9A5B00`
+  - Recommandé → fond bleu pâle `#E8F1FB`, texte `#1E64B8`
+  - Non requis → fond gris `#EEF1F4`, texte `#5A6779`
+- Tableaux : entêtes bleu `#1E64B8` texte blanc, lignes alternées `#F7FAFC`.
+- Polices : Inter (déjà via Google Fonts CDN), titres en `600`, corps `400`.
+- Résumé imprimé : même palette, logo en haut à gauche, bande dégradée réduite à 4 mm pour économiser l'encre.
 
 ---
 
-## Question avant implémentation
+Aucune autre fonctionnalité du v7 n'est modifiée (extraction PDF, calcul d'âge, Rage A/B/C, Diarrhée/Choléra séparés, long séjour auto, contact population locale, etc.).
 
-Pour le point 7, comment veux-tu renommer « Accès à l'eau potable restreint / achlorhydrie » ? Trois propositions possibles :
-1. **Risque alimentaire et hydrique élevé**
-2. **Eau et alimentation à risque**
-3. **Conditions sanitaires limitées (eau / nourriture)**
-
-Réponds avec ton choix (ou ton propre libellé) et je livre `test_v7.html`.
+Confirmation : je livre `test_v8.html` dans `/mnt/documents/` ?
