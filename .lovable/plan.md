@@ -1,67 +1,67 @@
+## Correctifs `test_v8.html` → `test_v9.html`
 
-## Correctifs `test_v7.html` → `test_v8.html`
+Toujours un seul fichier HTML autonome, 100 % côté navigateur, aucune dépendance externe sauf les CDN déjà utilisés.
 
-Toujours un seul fichier HTML autonome, 100 % côté navigateur. Logo VacciCheck (image jointe) intégré en base64.
+### 1. Champ volume (ml) séparé du nom du vaccin
+Actuellement la ligne affichée concatène le produit, le volume et la mention dose dans une seule chaîne (« Hépatite A — HAVRIX — 0,5 ml (junior / demi-dose) »).
 
-### 1. Volume (ml) + mention « junior / demi-dose » — réparation
-Le code v7 capturait `doseVolume` mais l'affichage de la ligne vaccinale ne l'imprimait pas (oubli dans le template). Correctifs :
-- Dans la regex de parsing du carnet québécois, élargir la capture du volume : accepter `0,5 ml`, `0.5 ml`, `1 ml`, `1,0 ml`, `1.0 ml` (la virgule décimale française n'était pas reconnue).
-- Ajouter le volume **systématiquement** dans le libellé affiché : `Hépatite A — HAVRIX — 0,5 ml`.
-- Règles demi-dose (étiquette ajoutée à droite du volume) :
-  - Havrix 0,5 ml → `(junior / demi-dose)`
-  - Engerix-B 0,5 ml → `(demi-dose)`
-  - Recombivax HB 0,5 ml → `(demi-dose)`
-- Si le volume n'est pas trouvé dans le PDF, afficher `— ml non précisé` au lieu de masquer.
-- Même affichage dans le résumé imprimé et dans la table d'historique.
+Correctif :
+- Séparer dans le modèle de données : `{ antigene, produit, volumeMl, doseLabel, date, ageReception, lot }`.
+- Affichage en colonnes distinctes dans la table d'historique vaccinal :
+  `Antigène | Produit | Volume | Dose | Date | Âge | Lot`
+  - Colonne **Volume** : `0,5 ml` ou `— ` si absent
+  - Colonne **Dose** : badge `Demi-dose` / `Junior` / `Standard` (déduit automatiquement comme en v8)
+- Le résumé imprimé liste aussi le volume dans une colonne propre, plus dans le nom.
+- Aucun changement à la logique d'extraction PDF — uniquement séparation des champs déjà capturés.
 
-### 2. Réorganisation de la mise en page
-Passer en grille deux colonnes sur écran ≥ 1100 px :
-```text
-┌──────────────────────────┬──────────────────────────┐
-│  Carnet de vaccination   │  Patient et voyage       │
-│  (import PDF)            │  Pays de destination     │
-│                          │  Questionnaire clinique  │
-├──────────────────────────┴──────────────────────────┤
-│  Résultats / Recommandations (pleine largeur)       │
-└─────────────────────────────────────────────────────┘
-```
-- Sur mobile (< 1100 px) : empilement vertical, ordre = Carnet → Patient/voyage → Questionnaire → Résultats.
-- Les sections Patient/voyage, Pays, Questionnaire clinique restent visibles dès l'ouverture de la page, plus besoin de scroller après import.
+### 2. Cases à cocher dans le questionnaire clinique
+Conversion des menus déroulants binaires/multi-options indépendantes vers des cases à cocher :
 
-### 3. Ordre des initiales (prénom d'abord)
-Corriger `extractInitials()` : actuellement on prend `lastName[0] + firstName[0]` (ordre du PDF québécois `NOM, Prénom`). Inverser → `firstName[0] + ". " + lastName[0] + "."` → `G. P.` pour « Guillaume Page ». S'applique au champ initiales, au résumé imprimé, et au header de la fiche.
+| Champ actuel | Nouveau format |
+|---|---|
+| Long séjour (déjà coché) | reste case à cocher |
+| Contact avec population locale (Aucun / Occasionnel / Étroit) | **garde le select** (3 options exclusives) |
+| Eau et alimentation à risque (2 sous-groupes) | déjà cases à cocher en v8 |
+| Grossesse / allaitement | cases à cocher (séparées) |
+| Immunosuppression | case à cocher |
+| Travailleur de la santé | case à cocher |
+| Activités à risque rage (spéléologie, contact animaux…) | cases à cocher (multi-choix) |
+| Saison de transmission (encéphalite japonaise, méningite) | **garde le select** (exclusif) |
+| Type de séjour (urbain / rural / mixte) | **garde le select** (exclusif) |
 
-### 4. Restaurer les deux sous-groupes de « Eau et alimentation à risque »
-La case unique cochable est remplacée par **deux cases distinctes** (l'une OU l'autre suffit à activer la recommandation Hépatite A / Typhoïde / Choléra renforcée) :
+Règle générale : binaire ou multi-sélection → case à cocher ; choix exclusif parmi 3+ options → select conservé.
 
-- **Sous-groupe A — Conditions sanitaires inadéquates** : « N'aura pas accès à de l'eau potable ET sera en contact étroit avec une population indigente isolée des ressources médicales (coopérants, personnel de la santé, personnel humanitaire en zones sinistrées / camps de réfugiés, etc.) »
-- **Sous-groupe B — Mécanismes de défense gastrique amoindris** : « Achlorhydrie, gastrectomie, vagotomie, thérapie continue aux IPP (oméprazole, lansoprazole) ou aux anti-H2 (cimétidine, famotidine, ranitidine) »
+### 3. Recalcul automatique des recommandations
+Bug actuel : `renderResults()` n'est appelé qu'au clic sur « Calculer », ou au changement de pays/dates. Les checkboxes et selects du questionnaire clinique ne déclenchent rien.
 
-Logique : `eauEtAlimentationRisque = sousGroupeA || sousGroupeB`. Le résumé imprimé liste lequel des deux est coché.
+Correctif :
+- Attacher un listener global `change` + `input` sur le formulaire complet (`#mainForm`) qui appelle `renderResults()` (avec debounce 150 ms).
+- Suppression du bouton « Calculer » manuel ou le garder en secours.
+- Le recalcul s'applique aussi après import PDF (déjà le cas).
 
-### 5. Redesign avec la palette du logo VacciCheck
-Palette extraite du logo :
-- Bleu principal : `#1E64B8` (V du logo)
-- Vert principal : `#39A845` (Check du logo)
-- Cyan/teal accent : `#2DBFD4` (seringue)
-- Fond : `#F7FAFC` (off-white)
-- Texte : `#0F2747` (bleu nuit)
+### 4. Section « Carnet de vaccination » rétractable
+- Envelopper la carte « Carnet de vaccination » dans un `<details>` natif HTML, ouvert par défaut.
+- `<summary>` cliquable affiche : `Carnet de vaccination ▾ (12 entrées importées)` avec compteur dynamique.
+- Après un import réussi, repli automatique de la section pour libérer de l'espace ; l'utilisateur peut la rouvrir d'un clic.
+- Style cohérent avec la palette VacciCheck (bande bleu pâle, chevron vert).
 
-Changements visuels :
-- En-tête : bande dégradée `linear-gradient(135deg, #1E64B8 0%, #2DBFD4 50%, #39A845 100%)` avec logo (hauteur 56 px) à gauche et titre **VacciCheck** en blanc.
-- Cartes : fond blanc, bordure `1px solid #E3EAF2`, ombre douce, coin arrondi 12 px, titre de carte sur bande bleue claire `#E8F1FB` avec barre verticale verte `#39A845` à gauche.
-- Boutons primaires : bleu `#1E64B8`, hover bleu foncé ; boutons secondaires : contour vert `#39A845`.
-- Badges de statut vaccinal :
-  - À jour → fond vert pâle `#E6F4E8`, texte `#1F7A2A`
-  - Rappel requis → fond ambre `#FFF4E0`, texte `#9A5B00`
-  - Recommandé → fond bleu pâle `#E8F1FB`, texte `#1E64B8`
-  - Non requis → fond gris `#EEF1F4`, texte `#5A6779`
-- Tableaux : entêtes bleu `#1E64B8` texte blanc, lignes alternées `#F7FAFC`.
-- Polices : Inter (déjà via Google Fonts CDN), titres en `600`, corps `400`.
-- Résumé imprimé : même palette, logo en haut à gauche, bande dégradée réduite à 4 mm pour économiser l'encre.
+### 5. Confidentialité — audit et durcissement
+État actuel : tout est côté navigateur, aucune requête réseau, aucun backend. Mais le nom complet du patient reste en mémoire JS pendant la session et risque d'être enregistré ailleurs.
+
+Correctifs :
+- **Aucun stockage persistant** : suppression de tout appel `localStorage`, `sessionStorage`, `indexedDB`, `document.cookie` (vérifier qu'il n'y en a aucun ; ajouter commentaire interdiction).
+- **Nom complet jamais conservé** : après extraction, on extrait immédiatement les initiales puis on **écrase** la variable `fullName` (`fullName = null`). Seules les initiales restent en mémoire.
+- **Date de naissance** : conservée uniquement pour le calcul d'âge ; jamais affichée à l'écran ni dans le résumé imprimé (seul l'âge calculé apparaît).
+- **Numéro d'assurance maladie / NAM** : si présent dans le PDF, ne jamais l'extraire (regex de blocage explicite, jeté avant stockage).
+- **Impression / export** : le résumé imprimé affiche les initiales + l'âge, jamais le nom ou la DDN.
+- **Aucune requête réseau sortante** : ajout d'un meta CSP strict
+  `<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob:; connect-src 'none'; form-action 'none'">`
+  ce qui bloque toute exfiltration accidentelle (fetch, XHR, formulaire). Les CDN polices/PDF.js sont déjà inlinés ou autorisés via `script-src`.
+- **Vidage explicite** : bouton « Effacer la session » qui réinitialise tous les champs + recharge la page (`location.reload()`).
+- **Avertissement visible** en bas de page : « Toutes les données restent dans votre navigateur. Aucune information n'est envoyée à un serveur. »
 
 ---
 
-Aucune autre fonctionnalité du v7 n'est modifiée (extraction PDF, calcul d'âge, Rage A/B/C, Diarrhée/Choléra séparés, long séjour auto, contact population locale, etc.).
+Aucune autre fonctionnalité du v8 n'est modifiée (palette VacciCheck, layout 2 colonnes, initiales prénom-nom, sous-groupes eau/alimentation, etc.).
 
-Confirmation : je livre `test_v8.html` dans `/mnt/documents/` ?
+Livraison : `test_v9.html` dans `/mnt/documents/`. Confirmer pour implémentation.
