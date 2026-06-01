@@ -1,86 +1,87 @@
-# test_v12.html — correctifs ciblés sur v11
+# test_v13.html — 3 correctifs ciblés sur v12
 
-Livrable : `/mnt/documents/test_v12.html`. Repart de v11, on ne touche qu'aux 4 points ci-dessous.
+Livrable : `/mnt/documents/test_v13.html`. On repart de v12, on touche seulement aux 3 points ci-dessous. Tout le reste (logique paludisme, demi-doses HA/HB, dark mode, calculs d'âge / durée, catégories Rage A/B/C, formatage INSPQ) reste tel quel.
 
-## 1. Import PDF du carnet (régression)
+## 1. Importation PDF du carnet RVQ (régression)
 
-Symptômes : une seule entrée importée (au lieu de ~14), initiales et date de naissance perdues.
+**Cause confirmée** sur le PDF fourni (`PAGE, GUILLAUME` — 31 entrées sur 7 pages) : la fonction `parseQuebecCarnet()` actuelle parse **ligne par ligne** et exige que **l'antigène ET la date** apparaissent sur la même ligne. Or, dans le carnet du Registre de vaccination du Québec, chaque ligne du tableau est éclatée verticalement :
 
-- Remplacer l'extraction texte actuelle par la version v8/v9 basée sur les **coordonnées** de PDF.js :
-  - pour chaque page, `getTextContent()` → grouper les `items` par Y (tolérance 3 pt), trier par X croissant, insérer un double espace quand le gap horizontal > 10 pt, joindre les lignes avec `\n`
-  - concaténer toutes les pages, puis parser ligne par ligne (au lieu d'un gros bloc aplati)
-- Rétablir les regex v8 pour :
-  - **date de naissance** (motifs `Date de naissance`, `DDN`, `Né[e] le`, formats DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD)
-  - **initiales** (motif `Initiales :` / `Init.` sur la même ligne ou la suivante)
-  - **lignes de doses** (antigène + produit + date + volume) — la perte des sauts de ligne en v10/v11 fait qu'une seule dose est détectée
-- Conserver les garde-fous existants (taille 15 Mo, worker bundlé, CSP `worker-src 'self' blob:`).
-- Test sandbox : recharger un carnet de référence et vérifier ≥ 10 doses, DDN et initiales remplies.
-
-## 2. Libellés du sélecteur de thème
-
-- Remplacer les icônes 🌙 / ☀ du bouton header par les textes **« Mode sombre »** (quand on est en clair) et **« Mode clair »** (quand on est en sombre).
-- Aucun changement de comportement : toggle classe `dark`, persistance `localStorage vc_theme`.
-
-## 3. Pictogrammes statut + catégories Rage
-
-### Pictogrammes (résultats + impression)
-Remplacer les cases à cocher vides actuelles dans `statusBadge()` par de vraies icônes SVG inline (héritent `currentColor`, lisibles en N&B) :
-
-| Statut | Pictogramme |
-|---|---|
-| Complet | bouclier coché |
-| Recommandé | seringue |
-| À considérer | point d'exclamation dans triangle |
-| Non requis | cercle barré |
-| Urgent | sablier / horloge rouge |
-
-Conserver le code couleur de v11. Pictogrammes identiques à l'écran et à l'impression.
-
-### Catégories d'exposition Rage
-Remplacer le `<select>` actuel (Cat I/II/III) par les 3 groupes INSPQ demandés :
-
-- **A — Chauves-souris** (visite de grottes / spéléologie, travail à l'étranger comme vétérinaire, animalier, agent de conservation de la faune)
-- **B — Mammifères sauvages** (vétérinaire/animalier à l'étranger ; activités extérieures prolongées : cyclisme, randonnée, camping, travail extérieur ou auprès des animaux ; séjour prolongé ou à répétition ; enfants en bas âge)
-- **C — Mammifères domestiques, surtout chiens errants** (tout ce qui est dans B + promenades urbaines/villageoises/rurales)
-
-Chaque option affiche un court tooltip / texte d'aide reprenant la définition (au survol ou sous le select). `recommendForDisease('Rage', …)` mis à jour en conséquence : A/B/C + pays à risque → `Recommandé`, sinon `À considérer` ou `Non requis` selon la classification INSPQ.
-
-## 4. Mise en forme INSPQ (Togo : fièvre jaune, méningocoque)
-
-Cause : les blocs INSPQ sont actuellement aplatis en un seul paragraphe, les sous-titres de zone et leurs puces sont mélangés.
-
-- Réécrire `formatInspqHtml(text)` pour qu'elle reconnaisse les patrons suivants :
-  - phrases d'en-tête : `Exigence douanière :`, `Recommandation d'immunisation :`, `Vaccin requis …`, `Région à l'intérieur de la ceinture …`, `Région à l'extérieur de la ceinture …`, etc. → chacune sur sa propre ligne (`<p>` ou `<h4>`)
-  - phrase se terminant par `:` → traiter comme sous-titre suivi d'un `<ul>` contenant les puces consécutives
-  - lignes commençant par `•`, `–`, `-`, `*` → `<li>` dans le `<ul>` du sous-titre courant
-  - double saut de ligne `\n\n` → nouveau paragraphe
-- Re-parser la base INSPQ embarquée (script `tools/build-inspq-db.mjs` déjà présent) pour conserver les sauts de ligne d'origine entre paragraphes, sous-titres et puces, au lieu de tout coller.
-- Résultat attendu — Togo, fièvre jaune :
-
-```text
-Vaccin requis pour entrée et/ou présence de la maladie.
-Exigence douanière : Certificat exigé de tous les voyageurs âgés de 9 mois ou plus.
-Recommandation d'immunisation :
-  • Immunisation recommandée pour tous les voyageurs âgés de 9 mois ou plus.
+```
+COVID-19                ← antigène (col 1, ligne 1)
+COMIRNATY (PFIZER-BIONTECH)  ← produit (col 1, ligne 2)
+COVID-19                ← maladie (col 2)
+2021/04/12              ← date (col 3, ligne 1)
+(26 ans)                ← âge (col 3, ligne 2)
+0,30 ml                 ← volume (col 4)
+Intramusculaire         ← voie (col 4)
+LOUISE BELANGER         ← professionnel (col 5)
+…
 ```
 
-- Résultat attendu — Togo, méningocoque :
+L'antigène et la date sont **toujours** sur des lignes différentes → seule la première rangée par hasard alignée peut être détectée, d'où le « 1 seule entrée » observé. La DDN et le nom sont aussi sur des lignes séparées de leur étiquette (« Date de naissance : » suivi de `1994/08/09`).
 
-```text
-Région à l'intérieur de la ceinture africaine de la méningite (tiers nord du pays) :
-  • Immunisation pour tous durant la saison sèche (novembre à juin).
-  • Envisager l'immunisation pour des groupes particuliers en dehors de la saison sèche (juillet à octobre).
+### Correctif — passer à un parseur par **blocs** (groupes Y)
 
-Région à l'extérieur de la ceinture africaine de la méningite :
-  • Envisager l'immunisation pour des groupes particuliers.
+Remplacer la boucle ligne-par-ligne par un parseur 2 passes :
+
+**Passe A — extraction structurée par page** (`extractPdfLines` → `extractPdfRows`)
+- Pour chaque page : `getTextContent()` → grouper les items par Y (tolérance 3 pt), trier par X croissant, joindre avec un séparateur tabulation.
+- Conserver une `meta` par ligne : `{ y, x_min, text }`. On garde aussi `\n` entre lignes pour la rétro-compatibilité avec la détection de nom/DDN.
+
+**Passe B — détection des rangées vaccinales**
+- Ancre : une ligne dont le **premier token** correspond à un code antigène RVQ connu (`COVID-19`, `dcaT`, `DCaT-VPI`, `DCT-Hib`, `DCT-VPI-Hib`, `DT-Hib`, `HA`, `HB`, `HAHB`, `Inf`, `Men-C-C`, `Men-C-ACYW`, `Men-B`, `RRO`, `RRO-Var`, `Var`, `Pneu-C`, `Pneu-P`, `Rot`, `Typh`, `VPH`, `VPO`, `VPI`, `Zona`, `Rage`, `EJ`, `ET`, `FJ`, `Chol`, …) ou un produit commercial connu (réutiliser `COMMERCIAL_MAP`).
+- Pour chaque ancre, **lire les 8 lignes suivantes de la même page** :
+  - 1ʳᵉ date `YYYY/MM/DD` → `date` de l'entrée (rejeter si == DDN ou hors `[1970, today+1]`)
+  - 1ʳᵉ valeur `\d+[,.]\d+\s*ml` ou `\d+,\d+\s*co` → `volume`
+  - voie d'administration (`Intramusculaire`, `Sous-cutané`, `Orale`, `Inconnu`) → `voie` (optionnel, juste pour exclure de la zone de la rangée suivante)
+- Émettre une entrée `{antigen, product, date, volume, halfDose:false, ageAt:'', lot:''}` par ancre. Si plusieurs codes antigènes sont rencontrés dans la fenêtre, prendre le premier comme ancre et continuer après la date trouvée.
+- Garde-fou : si la ligne suivante est aussi un code antigène RVQ (rangée vide), on ferme la rangée courante immédiatement.
+
+**Nom et date de naissance**
+- Conserver les regex actuelles mais autoriser que la valeur soit sur la **ligne suivante** :
+  - `Nom :` seul → lire la ligne suivante (`PAGE, GUILLAUME` → `Guillaume Page`).
+  - `Date de naissance :` seul → lire la ligne suivante (`1994/08/09`).
+- `toInitials()` inchangé.
+
+**Critère d'acceptation** : sur `f8713fee-…-3.pdf` (carnet PAGE, GUILLAUME), l'import doit produire **31 entrées** (10 COVID-19, 1 dcaT, 1 DCaT-VPI, 4 DCT-Hib/PENTA, 1 HA, 3 HB, 11 Inf, 1 Men-C-C, 2 RRO, 1 Typh, 2 VPH, 2 VPO — total = 31), avec `patientName = "G. P."` et `dob = "1994-08-09"`.
+
+## 2. Pictogramme « Recommandé »
+
+Aujourd'hui : `statusBadge('Recommandé')` utilise `ICONS.syringeBadge` (seringue). Demande : **même bouclier que « Complet »** mais avec un **point d'exclamation** au centre au lieu du crochet `✓`. Le bouclier coché reste pour « Complet ».
+
+Ajouter une nouvelle icône `ICONS.shieldExclam` dans le bloc `ICONS = {…}` (lignes 323-334), de la même forme que `ICONS.check` (path `M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z`) mais avec un « ! » blanc au lieu du crochet :
+
+```js
+shieldExclam: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z"/><path d="M12 8v5" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.2" fill="#fff"/></svg>'
 ```
 
-- Vérification : ouvrir le résultat Togo dans la sandbox, copier le rendu textuel, comparer aux blocs ci-dessus. Idem à l'impression (les `<ul>` et sauts de paragraphe sont conservés).
+Puis :
+- `statusBadge('Recommandé')` (ligne 337) → utiliser `ICONS.shieldExclam` au lieu de `ICONS.syringeBadge`.
+- `svgFor()` (ligne 953-959) pour le rapport imprimable : `'Recommandé'` → `ICONS.shieldExclam` au lieu de `ICONS.check` (corrige aussi un bug : v12 affichait le crochet pour « Recommandé » à l'impression).
+- Les autres statuts (Complet → `check`, À considérer → `warn`, Non requis → `ban`, Urgent → `hourglass`) restent identiques.
 
-## Hors scope (v11 conservée telle quelle)
+## 3. Mesures préventives dans le rapport imprimable
 
-- Palette de couleurs, sections rétractables, base INSPQ 219 pays (seul le re-parsing pour §4 change la structure, pas le contenu).
-- Logique paludisme, demi-dose HA/HB, JotForms intégrés.
-- Calculs automatiques d'âge et de durée de voyage (déjà corrigés en v11).
+`renderPrintArea()` (lignes 924-952) génère la table des maladies par pays mais **n'inclut pas** le bloc `c.r` (« Autres mesures préventives » : arthropodes, eau/aliments, environnement, santé sexuelle, sécurité). À l'écran (lignes 911-916), ce bloc est déjà rendu.
 
-Confirme pour générer `test_v12.html`.
+Ajouter, juste après la boucle des maladies, dans `renderPrintArea` (avant le `</…>` de fin de pays) :
+
+```js
+if(c.r && Object.keys(c.r).length){
+  h+=`<h3 style="font-size:10pt;margin:.6rem 0 .25rem;color:#0a4d8a">Autres mesures préventives</h3>`;
+  Object.entries(c.r).forEach(([k,v])=>{
+    h+=`<div class="pr r-non"><div class="pri">${ICONS.warn}</div><div class="prc"><strong>${esc(k)}</strong>${formatInspqHtml(v)}</div></div>`;
+  });
+}
+```
+
+Aucune modification CSS nécessaire (`.pr`, `.pri`, `.prc`, `.r-non` existent déjà dans `@media print`).
+
+**Vérification** : ouvrir l'aperçu d'impression Togo → la section « Autres mesures préventives » apparaît sous la liste des maladies, avec les sous-titres « Risques liés aux arthropodes », « Risques environnementaux », « Santé sexuelle en voyage », etc.
+
+## Hors scope
+
+- Toute autre modification de la logique de recommandation, du formatage INSPQ, du dark mode, des catégories Rage, etc.
+- Refonte du parser de date / d'âge — uniquement la fenêtre de scan est élargie.
+
+Confirme pour générer `test_v13.html`.
