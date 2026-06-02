@@ -1,82 +1,76 @@
-# test_v17.html — Posologies 100 % Jotform + correctifs v16
+## Objectif
 
-## Architecture confirmée
-
-- **Déclenchement d'un vaccin** = règles INSPQ par pays (conservées).
-- **Posologie / nb de doses / intervalles / rappels** = uniquement les arbres décisionnels des 4 Jotforms. Aucun raccourci PIQ/INSPQ.
-
-## Livrable
-
-`/mnt/documents/test_v17.html` — base `test_v16.html`.
+Livrer `/mnt/documents/test_v21.html` (base v20) avec :
+1. Arbres décisionnels Hépatite A et B fidèles aux Jotforms (en particulier toutes les branches d'immunosuppression, double dose selon l'âge, dosage anti-HBs).
+2. Renommage d'un libellé du questionnaire clinique.
 
 ---
 
-## 1. Réécriture stricte des 14 arbres `DECISION_TREES`
+## 1. Refonte Hépatite A (Jotform P1 — questions #232, #233, #236, #240, #247, #250)
 
-Encoder **branche-par-branche** les questions des Jotforms (chaque `if` du Jotform = un `if` du code, libellés FR repris textuellement).
+Branches encodées dans `DECISION_TREES['Hépatite A']`, lues dans cet ordre :
 
-| Vaccin | Jotform | Questions (IDs) |
-|---|---|---|
-| Hépatite A | P1 | #232, #233, #236, #240, #247, #250 |
-| Hépatite B | P1 | #182, #183, #191, #196, #210, #263, #264 |
-| Choléra | P2 | #4, #5, #6, #7, #8 |
-| Dukoral (diarrhée voyageur) | P2 | #27, #28, #31, #33 |
-| Rage | P2 | #42, #46, #49 |
-| Poliomyélite | P2 | #85, #86, #88, #92, #97 |
-| Typhoïde | P2 | #108, #109, #110, #111, #119, #130 |
-| Mpox | P3 | #12, #15, #16 |
-| Chikungunya | P3 | #24, #27, #29 |
-| Fièvre jaune | P3 | #34, #36, #39, #41 |
-| Encéphalite japonaise | P3 | #49, #51, #53, #55, #58, #59, #60, #62, #75 |
-| Tétanos (DCaT/dT) | P3 | #3, #4, #5, #6, #7, #8, #9, #84, #90 |
-| Rougeole (ROR) | P4 | #3, #5, #9, #14, #18 |
-| Méningocoque | P4 | #26, #27, #29, #30, #31, #35, #40, #42, #45, #49, #54, #58, #64, #66 |
+- **#232 Statut immunitaire** (`q_immuno` + dérivés VIH/greffe/biologique) → immunocompétent vs immunosupprimé.
+- **#233 Doses au dossier** (via `ctx.stats(['Hépatite A','Hépatite A+B'])`) → 0, 1, ≥2.
+- **#236 Âge à la 1re dose** (registre `VACCINE_PRODUCTS`) → si <1 an, dose ne compte pas.
+- **#240 Délai depuis la dernière dose** → si <6 mois, attendre ; sinon administrer 2e dose.
+- **#247 Présence d'une hépatopathie chronique** (`q_hepatique`) → vaccination prioritaire + envisager sérologie post-vaccinale.
+- **#250 Immunosupprimé** → schéma 2 doses standard MAIS contrôle anti-HAV IgG 1-2 mois après la 2e dose (cible séroconversion). Considérer une 3e dose si non-répondeur. Pour ≥40 ans immunosupprimé OU hépatopathie sévère : envisager Ig IM 0,02 mL/kg en complément de la 1re dose si départ <2 semaines.
 
-Sortie : `{ posologie, complet, urgent?, notes? }` rendue dans l'encadré « Posologie suggérée ».
+Sortie : posologie + notes contextuelles + bannière "anti-corps à doser" quand pertinent.
 
-## 2. Champs UI manquants exigés par les Jotforms
+## 2. Refonte Hépatite B (Jotform P1 — questions #182, #183, #191, #196, #210, #263, #264)
 
-Conditionnels (visibles seulement si reco INSPQ active) :
-- Statut immunitaire (immunocompétent / immunosupprimé) → HépA, HépB, Rage, FJ, EJ, Méningo
-- HépB : 5 catégories patient (#264)
-- Mpox : 3 catégories (#15)
-- FJ : 4 catégories spéciales (#41)
-- Typhoïde : 5 catégories voyageur (#130)
-- Méningo : groupes particuliers >30 ans (#64)
-- EJ : milieu rural (#55), durée >1 mois (#58), période transmission (#53)
+Branches dans `DECISION_TREES['Hépatite B']` :
 
-## 3. Registre vaccinal détaillé (auto + éditable)
+- **#263/#264 Catégorie patient** : ajouter un sélecteur conditionnel `q_hepb_categorie` (5 choix Jotform) : (a) Adulte immunocompétent, (b) Nourrisson/enfant <20 ans, (c) Immunosupprimé non dialysé, (d) Hémodialysé / insuffisance rénale chronique, (e) Pré-greffe / post-greffe.
+- **#182 Doses au dossier** (`ctx.stats(['Hépatite B','Hépatite A+B'])`).
+- **#183 Anti-HBs antérieur connu** : nouveau champ `q_antiHBs` (UI/L ou "inconnu") → si ≥10 UI/L documenté, considéré protégé (sauf hémodialysé : cible ≥10 annuelle).
+- **#191 Schéma utilisé** : standard 0-1-6 vs accéléré 0-7-21+12mois vs Heplisav-B 0-1 mois.
+- **#196 Âge à la 1re dose / âge actuel** : <20 ans → dose pédiatrique (0,5 mL) ; ≥20 ans → dose adulte (1 mL).
+- **#210 Délai depuis dernière dose** : si série interrompue, reprendre là où arrêtée (pas de redémarrage).
+- **#264 Double dose** :
+  - Immunosupprimé non dialysé → **double dose** (40 µg) à 0-1-2-6 mois + dosage anti-HBs 1-2 mois après la dernière dose, cible ≥10 UI/L.
+  - Hémodialysé / IRC → Engerix-B 40 µg (2×20 µg) ou Recombivax HB 40 µg (1 mL formulation dialyse) à 0-1-2-6 mois + dosage annuel anti-HBs, rappel si <10 UI/L.
+  - Pré-greffe : double dose accélérée 0-1-2-6 mois, anti-HBs 1-2 mois post-série.
+  - Non-répondeur (anti-HBs <10 après série complète) : 2e série de 3 doses (double dose si immunosupprimé), re-dosage 1-2 mois après.
 
-Pour chaque vaccin déclenché : nb doses, âge à la 1re dose, délai depuis dernière dose, drapeaux « après 1/4/10/40 ans ». Pré-rempli via PDF importé (mapping `VACCINE_PRODUCTS` existant), éditable manuellement.
+Sortie : posologie + bannière "Anti-HBs à doser 1-2 mois après la dernière dose (cible ≥10 UI/L)" quand applicable.
 
-## 4. Tétanos — réécriture stricte Jotform P3
+## 3. UI conditionnelle (section "Posologie suggérée" ou bloc dédié)
 
-Suppression de toute inspiration PIQ. Arbre #3→#84→#5→#6→#7→#8→#9→#90 uniquement. Pas de coqueluche/diphtérie séparée. Pré-rempli depuis le carnet.
+- Lorsque Hépatite B est déclenchée : afficher le sélecteur `q_hepb_categorie` + champ `q_antiHBs` (input numérique optionnel, placeholder "UI/L"). Pré-rempli "Adulte immunocompétent" par défaut, ou "Immunosupprimé non dialysé" si `q_immuno` coché.
+- Lorsque Hépatite A est déclenchée et `q_immuno` OU `q_hepatique` coché : afficher case "Considérer Ig IM si départ <14 j" + rappel anti-HAV IgG post-vaccinal.
+- Recalcul via `recompute()` à chaque changement.
 
-## 5. Correctifs v16 (issues signalées)
+## 4. Renommage questionnaire clinique (ligne 259)
 
-**5a. Chikungunya absent des résultats**
-Diagnostiquer pourquoi la carte n'apparaît pas dans `recompute()` / `renderPrintArea()` (probablement non listé dans l'itération des vaccins INSPQ ou nom canonique mal mappé). Corriger pour qu'il se rende exactement comme les autres vaccins dès que le pays le déclenche.
+Avant :
+```html
+<input type="checkbox" id="q_enfants_locaux"/> Contact rapproché avec enfants locaux
+```
+Après :
+```html
+<input type="checkbox" id="q_enfants_locaux"/> Contact avec la population locale
+```
+(ID inchangé pour ne pas casser les références JS — seul le libellé visible change.)
 
-**5b. Posologie Choléra et Dukoral manquante**
-La posologie n'est pas rendue lorsque le statut est *Recommandé* ou *À considérer* pour ces deux vaccins. Vérifier les noms canoniques (`'Choléra'` vs `'Dukoral'` vs `'Diarrhée du voyageur'`), ajouter les alias dans `DECISION_TREES`, et confirmer que `posologyFor()` est bien appelé pour ces deux entrées (deux indications distinctes : choléra et diarrhée du voyageur).
+## 5. QA
 
-**5c. Carte Tétanos intégrée à la liste principale**
-Au lieu d'un bloc séparé, l'insérer dans la même grille que les autres vaccins (dashboard + zone d'impression), toujours affichée (pays-indépendante), position cohérente (en tête ou en fin de liste).
+Scénarios à dérouler manuellement et comparer à la sortie Jotform :
+1. Adulte 40 ans immunocompétent, Hépatite B 0 dose → 0-1-6 standard, pas de dosage.
+2. Adulte 35 ans VIH+ CD4 bas (immunosupprimé), Hépatite B 0 dose → **double dose 40 µg 0-1-2-6** + anti-HBs 1-2 mois post.
+3. Adulte 60 ans hémodialysé, Hépatite B 2 doses au dossier → compléter 0-1-2-6 en formulation dialyse + dosage annuel.
+4. Adulte 50 ans hépatopathie chronique, Hépatite A 0 dose, départ dans 10 j → 1re dose Havrix + envisager Ig + dosage anti-HAV.
+5. Adulte 30 ans, anti-HBs antérieur 35 UI/L → considérer protégé, aucun rappel.
 
-## 6. QA — 3 scénarios
+## Technique
 
-1. Enfant 2 ans, Togo, immunocompétent, carnet vide.
-2. Adulte 35 ans, Inde long séjour, 1 dose HépB ado.
-3. Adulte 60 ans, Brésil court séjour, asplénie, DCaT à 45 ans.
-
-Comparer chaque sortie posologique avec ce que produirait le Jotform manuel.
+- Modifier `DECISION_TREES['Hépatite A']` et `['Hépatite B']` dans `/mnt/documents/test_v20.html` → sauver sous `test_v21.html`.
+- Ajouter les inputs conditionnels `q_hepb_categorie` (select) et `q_antiHBs` (input number) dans la section questionnaire, masqués par défaut, révélés via `display:none` toggle dans `renderPrintArea()` / `recompute()`.
+- Étendre `buildCtx()` pour exposer `ctx.hepb = { categorie, antiHBs }`.
+- Vérifier la lecture : générer le HTML, ouvrir dans un headless browser et capturer la zone "Posologie suggérée" pour les 5 scénarios. Corriger jusqu'à conformité avec les Jotforms.
 
 ## Hors scope
 
-- Import PDF, dark mode, impression, listes INSPQ pays : inchangés.
-- Pas de coqueluche/diphtérie séparées.
-
-## Volume estimé
-
-~1 500-1 800 lignes JS (arbres + UI conditionnelle + registre + correctifs).
+- Carnet vaccinal, urgence/délai, autres vaccins, impression, design : inchangés.
