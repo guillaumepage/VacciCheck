@@ -1,134 +1,96 @@
-## Objectif
+## Livrable
 
-Livrer `/mnt/documents/test_v22.html` (copie de v21) avec 4 corrections ciblées. Aucun autre changement.
-
----
-
-## 1. Hépatite B — 3 doses normales chez un immunosupprimé
-
-**Fichier :** `test_v22.html`, `DECISION_TREES['Hépatite B']` (≈ lignes 1228-1265).
-
-**Problème actuel :** quand `cat==='immuno'` et `s.count===3`, la branche `s.count>0` calcule `remaining = max(0, 4-3) = 1` et affiche « 1 dose restante à 0-1-2-6 mois (double dose) » — incohérent puisque les 3 doses reçues étaient des doses simples.
-
-**Correction :** ajouter, AVANT le bloc `if(s.count>0)`, une branche spécifique :
-
-```js
-// 3+ doses standard reçues chez un patient désormais immunosupprimé / IRC / greffe
-if(s.count>=3 && (cat==='immuno' || cat==='dialyse' || cat==='greffe')){
-  return `<strong>${s.count} dose(s) standard au dossier — schéma normalement complet chez l'immunocompétent.</strong><br>
-  <strong>⚠ Statut immunosupprimé :</strong> ces doses auraient idéalement dû être administrées en <em>double dose (40 µg) à 0-1-2-6 mois</em>. Étant donné qu'elles ont été reçues en dose standard, <strong>monitorer le taux d'anti-HBs</strong> ; selon le résultat (cible ≥ 10 UI/L), administrer une ou plusieurs doses supplémentaires (double dose). Chez l'hémodialysé : dosage <strong>annuel</strong>.`;
-}
-```
-
-(La règle « ≥ 4 doses chez immuno/greffe » existante reste en aval.)
+`/mnt/documents/test_v27.html` cloné depuis `test_v26.html`. Trois corrections ciblées, rien d'autre.
 
 ---
 
-## 2. Fièvre jaune — badge « Complet » lorsqu'au moins 1 dose au carnet
+### 1) ETEC : mention présente même en « À considérer »
 
-**Fichier :** `test_v22.html`, branche `if(disease==='Fièvre jaune')` dans `determineStatus` (≈ lignes 1071-1085).
+**Fichier :** `test_v27.html`, fonction `tdBlock(slug)` (≈ lignes 1110‑1125) et `DECISION_TREES['Diarrhée du voyageur']` / `DECISION_TREES['Choléra']`.
 
-**Problème :** le moteur `DECISION_TREES['Fièvre jaune']` (texte « Protection à vie ») se déclenche bien, mais le badge `status` reste `Recommandé` + `urgent:true` car `determineStatus` ne consulte jamais le carnet pour la fièvre jaune.
+Aujourd'hui la phrase *« Efficacité ~ 60 % sur les diarrhées à ETEC (6 à 16 % des diarrhées toutes causes confondues) »* n'apparaît que lorsque le statut Dukoral est **Complet** (≥ 2 doses récentes).
 
-**Correction :** en tout début de la branche `if(disease==='Fièvre jaune')`, ajouter :
-
-```js
-const yfDoses = isDoseCountFor('Fièvre jaune');
-if(yfDoses>=1 && !(rg.immuno||rg.grossesse)){
-  return {status:'Complet',
-          msg:'1 dose ou plus au carnet — protection à vie (OMS 2016). Certificat international valide à vie.',
-          urgent:false};
-}
-```
-
-(Pour `rg.immuno`/`rg.grossesse`, le flux existant continue de s'appliquer — un rappel peut être indiqué après 10 ans.)
+Patch :
+- Définir une constante `const ETEC_EFF = "Efficacité ~ 60 % sur les diarrhées à ETEC (6 à 16 % des diarrhées toutes causes confondues sont prévenues par le Dukoral).";`
+- L'ajouter à la fin du `txt` de **toutes les branches** retournées par `tdBlock` quand `td==='modéré'` ou `td==='élevé'` (1 dose au dossier, 0 dose, > 5 ans, < 5 ans avec rappel, etc.). Ne pas la mettre dans la branche `faible` (Dukoral non requis).
+- Idem dans la branche « À considérer » des arbres de décision Choléra / Diarrhée du voyageur (`DECISION_TREES`) pour cohérence avec la carte Pays.
 
 ---
 
-## 3. Saisie manuelle de volume (ex. « 0.5 » ou « 0,5 ») — la page remonte en haut
+### 2) Ajouter Men-C-C aux antigènes saisissables manuellement
 
-**Fichier :** `test_v22.html`, `renderVaccineRows()` (≈ lignes 615-622).
+**Fichier :** `test_v27.html`, `VACCINE_PRODUCTS` (lignes 381‑402) + regex carnet (lignes 180‑232).
 
-**Cause :** sur chaque frappe dans l'input « Vol (ml) », le listener `input` exécute `renderVaccineRows()` — la table entière est recréée via `innerHTML`, l'input perd le focus, le scroll saute en haut. Le listener global `document.body 'input'` déclenche aussi `recompute()` en parallèle.
-
-**Correction :**
-
-1. Dans la boucle des inputs (ligne 615), distinguer `input` et `change` pour le champ `volume` :
-
-```js
-el.addEventListener('input', ev=>{
-  const k = el.dataset.k;
-  if(el.type==='checkbox') state.vaccineEntries[i][k]=el.checked;
-  else if(el.tagName==='SELECT' && k==='product'){ if(el.value) state.vaccineEntries[i][k]=el.value; }
-  else state.vaccineEntries[i][k]=el.value;
-  // NE PAS re-rendre la table pendant la frappe sur volume :
-  if(k==='antigen'){ deriveHalfDose(state.vaccineEntries[i]); renderVaccineRows(); }
-  // volume : recompute uniquement, sans renderVaccineRows
-});
-el.addEventListener('change', ev=>{
-  const k = el.dataset.k;
-  if(k==='volume'){ deriveHalfDose(state.vaccineEntries[i]); renderVaccineRows(); recompute(); }
-});
-```
-
-2. Conserver l'`addEventListener('input')` global ligne 1829 (debounce 150 ms) qui recalcule la posologie sans toucher au DOM de la table.
-
-Effet : l'utilisateur peut taper « 0,5 » sans interruption ; le badge « demi/junior » s'actualise au blur, et la posologie suit (recompute n'affecte que le rendu pays + résumé).
+- Ajouter une entrée distincte :
+  ```js
+  'Méningocoque C': ['Menjugate','NeisVac-C','Meningitec'],
+  ```
+  placée juste avant `'Méningocoque ACYW'`. (`ALL_ANTIGENS` est dérivé automatiquement, donc le `<select>` de saisie manuelle l'affichera.)
+- Étendre la détection texte du carnet : la règle actuelle `/^men[- ]?c\b/i → 'Méningocoque ACYW'` est incorrecte (Men‑C ≠ ACYW). La remplacer par :
+  ```js
+  {re:/^men[- ]?c(?![a-z])/i, ant:'Méningocoque C'},
+  {re:/menjugate|neisvac|meningitec/i, ant:'Méningocoque C'},
+  ```
+  et conserver la règle ACYW (`/^men[- ]?(acyw|quad)/i`) pour Menveo/Nimenrix/Menactra (déjà couverte par les regex produit).
+- Étendre la décision : ajouter `DECISION_TREES['Méningocoque C'] = DECISION_TREES['Méningocoque'];` et inclure `'Méningocoque C'` dans le `ctx.stats([...])` de l'arbre `'Méningocoque'`.
+- `antigenIcon('Méningocoque C')` réutilise l'icône méningocoque existante (aucun nouveau picto).
 
 ---
 
-## 4. Hépatite A — préciser dose complète vs demi-dose dans la recommandation
+### 3) Volume auto‑rempli lors de l'ajout manuel
 
-**Fichier :** `test_v22.html`, `DECISION_TREES['Hépatite A']` (≈ lignes 1180-1215).
+**Fichier :** `test_v27.html`, `renderVaccineRows()` (≈ lignes 95‑135) + nouveau helper.
 
-**Problème :** quand on recommande de compléter (1 dose au dossier), le texte ne précise pas s'il faut une dose adulte (1 mL) ou pédiatrique (0,5 mL) — ni s'il faut s'aligner sur ce qui a déjà été reçu.
+Comportement souhaité : quand l'utilisateur **choisit un antigène** (ou un produit) dans une ligne d'ajout manuel, le champ « Vol (mL) » se remplit automatiquement avec la valeur standard PIQ **si le champ est encore vide**. Si l'utilisateur a déjà tapé une valeur, on n'écrase rien.
 
-**Correction :** dans la branche `effectiveCount===1` (et également `effectiveCount>=2` pour cohérence), choisir le libellé du produit en fonction de :
-- `age` actuel (<18 → pédiatrique, ≥18 → adulte) ;
-- `s.halfDoses` / `s.fullDoses` (déjà exposés par `vaccineStats`) ;
-- `immuno` (un patient immunosupprimé doit recevoir des doses **complètes** même s'il a <18 ans → cas particulier mentionné).
+Implémentation :
 
-Patch (1 dose au dossier) :
+1. Table de valeurs par défaut (mL ou « capsule(s) ») — basée sur PIQ :
+   ```js
+   const DEFAULT_VOLUME = {
+     'Hépatite A':'1', 'Hépatite B':'1', 'Hépatite A+B':'1',
+     'DCaT':'0,5', 'ROR':'0,5', 'Varicelle':'0,5',
+     'Fièvre jaune':'0,5', 'Typhoïde':'0,5',
+     'Méningocoque C':'0,5', 'Méningocoque ACYW':'0,5', 'Méningocoque B':'0,5',
+     'Encéphalite japonaise':'0,5', 'Rage':'1',
+     'Choléra / DV':'3 (sachet)', 'Mpox':'0,5',
+     'Influenza':'0,5', 'COVID-19':'0,3',
+     'Encéphalite à tiques':'0,5', 'VPH':'0,5', 'Poliomyélite':'0,5'
+   };
+   // Surcharges par produit pédiatrique / oral
+   const DEFAULT_VOLUME_BY_PRODUCT = {
+     'Havrix Junior':'0,5','Avaxim Pédiatrique':'0,5','Twinrix Junior':'0,5',
+     'Engerix-B Pédiatrique':'0,5','Recombivax HB Pédiatrique':'0,5','Heplisav-B':'0,5',
+     'Vivotif':'1 capsule (×3 doses orales)',
+     'Fluad':'0,5','VPO (Sabin)':'2 gouttes (oral)'
+   };
+   function defaultVolumeFor(entry){
+     if(!entry) return '';
+     return DEFAULT_VOLUME_BY_PRODUCT[entry.product] || DEFAULT_VOLUME[entry.antigen] || '';
+   }
+   ```
 
-```js
-if(effectiveCount===1){
-  const since = s.yearsSinceLast;
-  const wasHalf = s.halfDoses>0 && s.fullDoses===0;
-  let doseLbl;
-  if(immuno){
-    doseLbl = 'dose <strong>complète</strong> (1 mL — Havrix 1440 / Avaxim / Vaqta), même si la 1re dose était pédiatrique : l\'immunosuppression justifie la dose adulte';
-  } else if(age!=null && age<18){
-    doseLbl = wasHalf
-      ? 'demi-dose pédiatrique (0,5 mL — Havrix Junior / Avaxim Pédiatrique), pour s\'aligner sur la 1re dose'
-      : 'dose pédiatrique (0,5 mL) si <18 ans, sinon dose adulte (1 mL)';
-  } else {
-    doseLbl = wasHalf
-      ? '<strong>dose complète adulte (1 mL)</strong> — patient désormais ≥ 18 ans ; ne pas refaire de demi-dose'
-      : 'dose complète adulte (1 mL — Havrix 1440 / Avaxim / Vaqta)';
-  }
-  let txt = (since!=null && since<6/12)
-    ? `<strong>1 dose reçue il y a ${since.toFixed(1)} an.</strong> Administrer la 2e dose ≥ 6 mois après la 1re — ${doseLbl}.`
-    : `<strong>1 dose reçue.</strong> Administrer la 2e dose maintenant (intervalle ≥ 6 mois respecté) — ${doseLbl}.`;
-  if(immuno) txt += ` <br><strong>⚠ Immunosupprimé :</strong> doser <em>anti-HAV IgG</em> 1-2 mois après la 2e dose.`;
-  if(hepato) txt += ` <br><strong>Hépatopathie chronique :</strong> vaccination prioritaire ; envisager sérologie post-vaccinale.`;
-  return txt;
-}
-```
+2. Dans le listener `input` de `renderVaccineRows()`, lorsque `k==='antigen'` ou `k==='product'` :
+   ```js
+   const cur = (state.vaccineEntries[i].volume||'').trim();
+   if(!cur){
+     const v = defaultVolumeFor(state.vaccineEntries[i]);
+     if(v) state.vaccineEntries[i].volume = v;
+   }
+   ```
+   Puis `deriveHalfDose(...)` + `renderVaccineRows()` (déjà fait).
 
-Pour `effectiveCount>=2` (Complet), ajouter un rappel si `wasHalf && age>=18` : « Les 2 doses étaient pédiatriques (0,5 mL) et le patient est désormais adulte — considérer une dose adulte de rappel selon le contexte d'exposition. » (Note discrète, status reste « Complet ».)
-
----
-
-## 5. QA manuelle (5 scénarios)
-
-1. Adulte 40 ans, **immunosupprimé**, Hép B 3 doses standard → texte « monitorer anti-HBs, doses supplémentaires en double dose au besoin » (corr. #1).
-2. Adulte 35 ans, 1 dose Stamaril ajoutée manuellement, pays « Recommandé pour tous » → badge **Complet** (corr. #2).
-3. Saisir « 0,5 » dans Vol (ml) lettre par lettre → la page **ne bouge pas**, focus conservé (corr. #3).
-4. Adulte 25 ans, 1 dose Havrix Junior (0,5 mL) au dossier → posologie : « 2e dose en **dose complète adulte (1 mL)** » (corr. #4).
-5. Adulte 30 ans **immunosupprimé**, 1 dose Havrix Junior → 2e dose en **dose complète (1 mL)** + dosage anti-HAV IgG (corr. #4 + branche immuno).
+3. Aucun changement pour les entrées extraites du carnet (le volume y est déjà parsé).
 
 ---
 
-## Hors scope
+### Hors scope
 
-Aucun changement aux autres vaccins, à la base INSPQ, au questionnaire clinique, à l'impression, au design ou au routeTree TanStack. Pas de refonte de l'event-binding global au-delà du listener décrit en #3.
+Pas de modification au DB INSPQ, aux autres arbres de décision, à la mise en page, au footer, au routeTree TanStack, ni au reste du moteur. Pas de bun add ni de nouvelle dépendance.
+
+### QA manuelle
+
+1. Pays à TD modéré sans Dukoral au carnet → carte DV affiche « À considérer » **et** la phrase ETEC.
+2. Ajouter manuellement « Men‑C » → l'option `Méningocoque C` apparaît dans le select, avec produits Menjugate/NeisVac‑C.
+3. Sélectionner « Fièvre jaune » dans une ligne vide → Vol passe à `0,5` automatiquement ; modifier ensuite à `1` → la valeur saisie est conservée si on change le produit après.
+4. Sélectionner « Vivotif » comme produit → Vol passe à `1 capsule (×3 doses orales)`.
