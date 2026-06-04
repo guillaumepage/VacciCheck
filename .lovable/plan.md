@@ -1,96 +1,136 @@
 ## Livrable
 
-`/mnt/documents/test_v27.html` cloné depuis `test_v26.html`. Trois corrections ciblées, rien d'autre.
+`test_v28.html` cloné depuis `test_v27.html`. Révision des arbres de décision (`DECISION_TREES`) pour aligner avec l'algorithme fourni par ta collègue. Pour chaque point, j'indique le statut (✅ déjà OK / ⚠️ à corriger / ❌ manquant).
 
 ---
 
-### 1) ETEC : mention présente même en « À considérer »
+### 1) Rougeole — ✅ déjà OK, ⚠️ wording « complet/incomplet »
+**Existant :** `'Rougeole'(ctx)` (l.1599‑1617) couvre : né <1970 immun, 2 doses dont ≥1 après 12 mois → complet, 6‑11 mois dose précoce qui ne compte pas, ≥1970 non immun → 2 doses ≥4 sem.
 
-**Fichier :** `test_v27.html`, fonction `tdBlock(slug)` (≈ lignes 1110‑1125) et `DECISION_TREES['Diarrhée du voyageur']` / `DECISION_TREES['Choléra']`.
-
-Aujourd'hui la phrase *« Efficacité ~ 60 % sur les diarrhées à ETEC (6 à 16 % des diarrhées toutes causes confondues) »* n'apparaît que lorsque le statut Dukoral est **Complet** (≥ 2 doses récentes).
-
-Patch :
-- Définir une constante `const ETEC_EFF = "Efficacité ~ 60 % sur les diarrhées à ETEC (6 à 16 % des diarrhées toutes causes confondues sont prévenues par le Dukoral).";`
-- L'ajouter à la fin du `txt` de **toutes les branches** retournées par `tdBlock` quand `td==='modéré'` ou `td==='élevé'` (1 dose au dossier, 0 dose, > 5 ans, < 5 ans avec rappel, etc.). Ne pas la mettre dans la branche `faible` (Dukoral non requis).
-- Idem dans la branche « À considérer » des arbres de décision Choléra / Diarrhée du voyageur (`DECISION_TREES`) pour cohérence avec la carte Pays.
+**À ajouter :** préfixer explicitement `<strong>Complet :</strong>` quand 2 doses valides et `<strong>Incomplet :</strong>` quand série partielle, pour cohérence avec la convention du Jotform.
 
 ---
 
-### 2) Ajouter Men-C-C aux antigènes saisissables manuellement
+### 2) Choléra (vaccination) — ✅ déjà OK
+`DECISION_TREES['Choléra']` (l.1684‑1700) gère 2 doses (3 si 2‑5 ans), rappel q2 ans, >5 ans → recommencer. Rien à changer côté posologie.
 
-**Fichier :** `test_v27.html`, `VACCINE_PRODUCTS` (lignes 381‑402) + regex carnet (lignes 180‑232).
-
-- Ajouter une entrée distincte :
-  ```js
-  'Méningocoque C': ['Menjugate','NeisVac-C','Meningitec'],
-  ```
-  placée juste avant `'Méningocoque ACYW'`. (`ALL_ANTIGENS` est dérivé automatiquement, donc le `<select>` de saisie manuelle l'affichera.)
-- Étendre la détection texte du carnet : la règle actuelle `/^men[- ]?c\b/i → 'Méningocoque ACYW'` est incorrecte (Men‑C ≠ ACYW). La remplacer par :
-  ```js
-  {re:/^men[- ]?c(?![a-z])/i, ant:'Méningocoque C'},
-  {re:/menjugate|neisvac|meningitec/i, ant:'Méningocoque C'},
-  ```
-  et conserver la règle ACYW (`/^men[- ]?(acyw|quad)/i`) pour Menveo/Nimenrix/Menactra (déjà couverte par les regex produit).
-- Étendre la décision : ajouter `DECISION_TREES['Méningocoque C'] = DECISION_TREES['Méningocoque'];` et inclure `'Méningocoque C'` dans le `ctx.stats([...])` de l'arbre `'Méningocoque'`.
-- `antigenIcon('Méningocoque C')` réutilise l'icône méningocoque existante (aucun nouveau picto).
+**À ajouter (point #8 du doc) :** logique de catégorisation `non requis / à envisager` selon contexte INSPQ + groupes (cf. point 8 ci‑dessous).
 
 ---
 
-### 3) Volume auto‑rempli lors de l'ajout manuel
+### 3) Poliomyélite — ⚠️ à enrichir
+**Existant :** `'Poliomyélite'(ctx)` (l.1524‑1541) parle de « voyageur en zone à risque » sans distinguer les 4 niveaux d'exigence du PIQ.
 
-**Fichier :** `test_v27.html`, `renderVaccineRows()` (≈ lignes 95‑135) + nouveau helper.
+**Patch :** lire `ctx.inspqText` (texte INSPQ du pays) et détecter :
+- `/polio.*sauvage|type 1|type 3|exigence d'entrée/i` → **rappel exigé** (4 sem ≤ délai ≤ 12 mois avant départ) pour adultes >10 ans depuis dernière dose
+- `/polio.*vaccinal.*type 2|cVDPV2/i` → **rappel recommandé** (même fenêtre)
+- `/eaux usées|détection.*environnement/i` → **rappel recommandé pour travailleurs eaux usées / contacts eau libre près des villes concernées**
+- Sinon (`/éliminée/i`) → **aucun rappel adulte requis**
 
-Comportement souhaité : quand l'utilisateur **choisit un antigène** (ou un produit) dans une ligne d'ajout manuel, le champ « Vol (mL) » se remplit automatiquement avec la valeur standard PIQ **si le champ est encore vide**. Si l'utilisateur a déjà tapé une valeur, on n'écrase rien.
+Conserver la logique pédiatrique existante (primovaccination DCaT-VPI 2-4-6 mois + rappels). Préfixer `Complet / Incomplet` selon `s.count`.
 
-Implémentation :
+---
 
-1. Table de valeurs par défaut (mL ou « capsule(s) ») — basée sur PIQ :
-   ```js
-   const DEFAULT_VOLUME = {
-     'Hépatite A':'1', 'Hépatite B':'1', 'Hépatite A+B':'1',
-     'DCaT':'0,5', 'ROR':'0,5', 'Varicelle':'0,5',
-     'Fièvre jaune':'0,5', 'Typhoïde':'0,5',
-     'Méningocoque C':'0,5', 'Méningocoque ACYW':'0,5', 'Méningocoque B':'0,5',
-     'Encéphalite japonaise':'0,5', 'Rage':'1',
-     'Choléra / DV':'3 (sachet)', 'Mpox':'0,5',
-     'Influenza':'0,5', 'COVID-19':'0,3',
-     'Encéphalite à tiques':'0,5', 'VPH':'0,5', 'Poliomyélite':'0,5'
-   };
-   // Surcharges par produit pédiatrique / oral
-   const DEFAULT_VOLUME_BY_PRODUCT = {
-     'Havrix Junior':'0,5','Avaxim Pédiatrique':'0,5','Twinrix Junior':'0,5',
-     'Engerix-B Pédiatrique':'0,5','Recombivax HB Pédiatrique':'0,5','Heplisav-B':'0,5',
-     'Vivotif':'1 capsule (×3 doses orales)',
-     'Fluad':'0,5','VPO (Sabin)':'2 gouttes (oral)'
-   };
-   function defaultVolumeFor(entry){
-     if(!entry) return '';
-     return DEFAULT_VOLUME_BY_PRODUCT[entry.product] || DEFAULT_VOLUME[entry.antigen] || '';
-   }
-   ```
+### 4) Typhoïde — rappels ✅ déjà OK
+Distinction Typhim (3 ans) vs Vivotif (7 ans) déjà gérée (l.1548‑1552). Rien à changer.
 
-2. Dans le listener `input` de `renderVaccineRows()`, lorsque `k==='antigen'` ou `k==='product'` :
-   ```js
-   const cur = (state.vaccineEntries[i].volume||'').trim();
-   if(!cur){
-     const v = defaultVolumeFor(state.vaccineEntries[i]);
-     if(v) state.vaccineEntries[i].volume = v;
-   }
-   ```
-   Puis `deriveHalfDose(...)` + `renderVaccineRows()` (déjà fait).
+---
 
-3. Aucun changement pour les entrées extraites du carnet (le volume y est déjà parsé).
+### 5) MPOX — ⚠️ à enrichir
+**Existant :** `'Mpox'(ctx)` (l.1516‑1521) — schéma 2 doses + 0/28 j seulement, sans catégorisation contextuelle.
+
+**Patch :** lire `ctx.inspqText` et catégoriser :
+- `/risque.*sexuel|principalement.*sexuel/i` (transmission sexuelle uniquement) → **Mesures de protection personnelles** (lien INSPQ) ; mentionner mesures additionnelles si pays d'Afrique. Vaccination uniquement si groupe d'indications PIQ.
+- `/présence|active|épidémie|éclosion/i` → **vaccination à envisager / recommandée** pour : activités sexuelles avec partenaires locaux, contacts prolongés étroits (même toit), travailleurs santé en soins directs.
+- Statut **Complet** si 2 doses ; **Incomplet** si 1 dose ; ajouter mention **rappel q 2 ans pour travailleurs de laboratoire à haut risque d'exposition à un orthopoxvirus réplicatif** quand applicable (case à cocher existante `rg.labo` si disponible, sinon note explicative).
+
+---
+
+### 6) Encéphalite japonaise — ⚠️ à enrichir
+**Existant :** `'Encéphalite japonaise'(ctx)` (l.1576‑1586) → posologie seulement, rappel générique ≥1 an.
+
+**Patch :** introduire la **catégorisation** (cohérente avec le Jotform) :
+- Pays sans EJ → **Non requis** + commentaire « vaccin indiqué si séjour >1 mois en milieu rural en période de transmission ».
+- Pays avec EJ + court séjour urbain → **Non requis** + commentaire des cas où il aurait été recommandé.
+- Pays avec EJ + <1 mois rural + facteur de risque (éclosion / destination incertaine / activités à risque) → **À envisager** + commentaire des contextes.
+- Pays avec EJ + ≥1 mois rural en période de transmission → **Recommandé** + commentaire du motif.
+- Rappels : **12 mois après primovaccination** ; **10 ans après** si exposition persiste (remplace le « ≥ 1 an » actuel).
+
+Source du contexte : nouveaux champs UI `q_ej_milieu` (rural/urbain), `q_ej_duree` (jours/mois), `q_ej_periode` (transmission oui/non), ou — si on ne veut pas toucher l'UI — questions inférées depuis `ctx.inspqText` + `daysToDep`. **Question pour toi : créer 3 nouveaux contrôles UI dans la section EJ, ou se contenter d'une heuristique texte ?**
+
+---
+
+### 7) Typhoïde — catégorisation ⚠️ à ajouter
+**Existant :** posologie OK, mais aucune logique « recommandé / à envisager / non requis » selon contexte.
+
+**Patch :** lire `ctx.inspqText` + groupes de risque (existants : `rg.immuno`, `rg.asplenie`, `rg.gastrique` — ajouter ce dernier s'il manque) :
+- `/risque.*transmission.*élevé/i` + Asie du Sud → **Recommandé pour tous**.
+- `/risque.*intermédiaire|faible|indéterminé/i` + voyageur dans un groupe particulier (long séjour, hors circuits, VFR, contacts étroits, complications [enfants/aspléniques/immunosupprimés], défenses gastriques amoindries [IPP, anti‑H2, gastrectomie, achlorhydrie, vagotomie]) → **À envisager** + commentaire du contexte.
+- Complexe hôtelier tout-inclus + risque faible/intermédiaire/indéterminé → **Non requis** + commentaire.
+- Si nouvelle dose requise (dépassement délai) : afficher la dose précédente + barème de validité + recommandation de revaccination.
+
+**Question : as‑tu déjà des cases UI pour « complexe tout-inclus », « VFR », « hors circuits », « long séjour », « défenses gastriques amoindries » ? Sinon, je les ajoute à la section Patient.**
+
+---
+
+### 8) Choléra — catégorisation ⚠️ à ajouter
+**Patch :** dans `DECISION_TREES['Choléra']`, avant la branche posologique, ajouter :
+- Si pays sans présence choléra → **Non requis**.
+- Si présence + voyageur ≥2 ans + (pas d'accès eau potable ET contact étroit population indigente : coopérants, personnel santé, humanitaire en zones sinistrées/camps réfugiés) **OU** défenses gastriques amoindries → **À envisager**.
+- Sinon → **Non requis** (commentaire).
+- Délai dépassé → dose précédente + validité + recommandation.
+
+**Question : ajouter case UI « coopérant / humanitaire / personnel santé en zone sinistrée » ? Et case « défenses gastriques amoindries » (réutilisable pour typhoïde) ?**
+
+---
+
+### 9) Chikungunya — ⚠️ correction âge
+**Existant :** ligne 1593 bloque <18 ans (« Ixchiq non homologué chez les mineurs »).
+
+**Patch :** changer le seuil à **12 ans** (récent élargissement Santé Canada). Conserver l'évaluation bénéfice/risque ≥65 ans.
+
+---
+
+### 10) Méningocoque — ⚠️ à enrichir
+**Existant :** `'Méningocoque'(ctx)` (l.1620‑1640) détecte vaguement « ceinture africaine » et mentionne Bexsero/Trumenba.
+
+**Patch :**
+- **Saison sèche (novembre→juin)** dans ceinture → **Recommandé pour tous**.
+- **Saison humide (juillet→octobre)** dans ceinture OU hors ceinture → **À envisager** selon groupes : <30 ans peu importe durée, ≥30 ans avec contacts étroits/prolongés (hébergement, transports, soins santé, réfugiés, voyage d'aventure) ou long séjour (≥3 semaines).
+- **Exception explicite :** safaris courts (Kenya/Tanzanie) → pas d'indication par défaut.
+- **Autres régions :** envisager si épidémie/éclosion/hausse inhabituelle d'un sérogroupe vaccinal dans les 6 mois précédents.
+- **Hadj / Umrah / travail saisonnier Arabie saoudite → EXIGÉ** (mention certificat).
+- **Choix vaccin :** Men‑C seul ou ACYW interchangeables pour primo ; **Menjugate nécessite une dose supplémentaire** ; pour primovaccination à compléter, **préférer ACYW** (protection plus complète).
+- Mois courant déterminé via `new Date().getMonth()` pour le contexte saison sèche/humide.
+- Statut **Complet / Incomplet** + commentaire des contextes.
 
 ---
 
 ### Hors scope
 
-Pas de modification au DB INSPQ, aux autres arbres de décision, à la mise en page, au footer, au routeTree TanStack, ni au reste du moteur. Pas de bun add ni de nouvelle dépendance.
+Pas de modification au DB INSPQ, à la mise en page, au footer, au routeTree, au moteur d'import carnet, ni au tableau `DEFAULT_VOLUME_BY_PRODUCT`. Pas de nouvelles dépendances.
 
 ### QA manuelle
 
-1. Pays à TD modéré sans Dukoral au carnet → carte DV affiche « À considérer » **et** la phrase ETEC.
-2. Ajouter manuellement « Men‑C » → l'option `Méningocoque C` apparaît dans le select, avec produits Menjugate/NeisVac‑C.
-3. Sélectionner « Fièvre jaune » dans une ligne vide → Vol passe à `0,5` automatiquement ; modifier ensuite à `1` → la valeur saisie est conservée si on change le produit après.
-4. Sélectionner « Vivotif » comme produit → Vol passe à `1 capsule (×3 doses orales)`.
+1. Pays avec polio sauvage (Afghanistan, Pakistan) → Polio affiche « rappel exigé 4 sem ≤ délai ≤ 12 mois ».
+2. Pays mpox transmission sexuelle (la plupart Amérique/Europe) → Mpox affiche « mesures protection personnelle » + condition vaccination groupe PIQ.
+3. Pays Afrique mpox actif (RDC) → Mpox affiche « vaccination recommandée pour activités sexuelles / contacts étroits / soignants ».
+4. Pays EJ + séjour rural >1 mois en saison → EJ « Recommandé ».
+5. Pays EJ + séjour urbain court → EJ « Non requis » + commentaire des cas indiqués.
+6. Inde tout-inclus + 0 facteur risque → Typhoïde « Non requis ».
+7. Inde + long séjour VFR → Typhoïde « Recommandé » (Asie du Sud risque élevé).
+8. Bangladesh + coopérant santé + pas d'accès eau potable → Choléra « À envisager ».
+9. Chikungunya patient 14 ans → posologie Ixchiq accessible (et non plus blocage <18).
+10. Arabie saoudite + Hadj → Méningocoque « Exigé » + mention certificat.
+11. Burkina Faso en janvier → Méningocoque « Recommandé pour tous (saison sèche) ».
+12. Burkina Faso en août → Méningocoque « À envisager » selon âge/durée.
+
+---
+
+### Questions ouvertes avant build
+
+A. **Encéphalite japonaise :** créer 3 contrôles UI (milieu, durée, période) ou heuristique pure depuis le texte INSPQ ?
+B. **Typhoïde / Choléra :** ajouter des cases UI pour les groupes spécifiques (tout-inclus, VFR, coopérant/humanitaire, défenses gastriques amoindries), ou se baser uniquement sur les groupes de risque déjà existants ?
+C. **Mpox travailleurs de laboratoire :** ajouter une case UI dédiée, ou se contenter d'une note conditionnelle dans le texte de sortie ?
+
+Réponds A/B/C (ou « tu décides » pour que je tranche au plus simple) et je passe en mode build.
