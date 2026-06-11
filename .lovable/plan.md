@@ -1,136 +1,98 @@
-## Livrable
 
-`test_v28.html` cloné depuis `test_v27.html`. Révision des arbres de décision (`DECISION_TREES`) pour aligner avec l'algorithme fourni par ta collègue. Pour chaque point, j'indique le statut (✅ déjà OK / ⚠️ à corriger / ❌ manquant).
+# Plan : Authentification, profils utilisateurs et rôles administratifs
 
----
+## Vue d'ensemble
 
-### 1) Rougeole — ✅ déjà OK, ⚠️ wording « complet/incomplet »
-**Existant :** `'Rougeole'(ctx)` (l.1599‑1617) couvre : né <1970 immun, 2 doses dont ≥1 après 12 mois → complet, 6‑11 mois dose précoce qui ne compte pas, ≥1970 non immun → 2 doses ≥4 sem.
+Mise en place d'un système de connexion complet sur le site, avec gestion de profil, deux comptes administrateurs prédéfinis, et fondations pour un futur abonnement payant.
 
-**À ajouter :** préfixer explicitement `<strong>Complet :</strong>` quand 2 doses valides et `<strong>Incomplet :</strong>` quand série partielle, pour cohérence avec la convention du Jotform.
+## 1. Activation de Lovable Cloud
 
----
+Lovable Cloud sera activé pour fournir la base de données, l'authentification et l'envoi des courriels de réinitialisation. Aucun compte externe n'est requis.
 
-### 2) Choléra (vaccination) — ✅ déjà OK
-`DECISION_TREES['Choléra']` (l.1684‑1700) gère 2 doses (3 si 2‑5 ans), rappel q2 ans, >5 ans → recommencer. Rien à changer côté posologie.
+## 2. Page d'authentification `/auth`
 
-**À ajouter (point #8 du doc) :** logique de catégorisation `non requis / à envisager` selon contexte INSPQ + groupes (cf. point 8 ci‑dessous).
+Design soigné et professionnel, cohérent avec le reste du site (palette médicale propre, formulaires épurés, états de chargement, messages d'erreur clairs en français). Elle comprend trois onglets/vues :
 
----
+- **Connexion** : courriel + mot de passe
+- **Création de compte** : courriel, mot de passe, prénom, nom (le profil détaillé se complète ensuite)
+- **Mot de passe oublié** : champ courriel → envoie un lien de réinitialisation
 
-### 3) Poliomyélite — ⚠️ à enrichir
-**Existant :** `'Poliomyélite'(ctx)` (l.1524‑1541) parle de « voyageur en zone à risque » sans distinguer les 4 niveaux d'exigence du PIQ.
+Une page `/reset-password` permettra à l'usager de définir un nouveau mot de passe après avoir cliqué sur le lien reçu par courriel.
 
-**Patch :** lire `ctx.inspqText` (texte INSPQ du pays) et détecter :
-- `/polio.*sauvage|type 1|type 3|exigence d'entrée/i` → **rappel exigé** (4 sem ≤ délai ≤ 12 mois avant départ) pour adultes >10 ans depuis dernière dose
-- `/polio.*vaccinal.*type 2|cVDPV2/i` → **rappel recommandé** (même fenêtre)
-- `/eaux usées|détection.*environnement/i` → **rappel recommandé pour travailleurs eaux usées / contacts eau libre près des villes concernées**
-- Sinon (`/éliminée/i`) → **aucun rappel adulte requis**
+## 3. Protection de l'application
 
-Conserver la logique pédiatrique existante (primovaccination DCaT-VPI 2-4-6 mois + rappels). Préfixer `Complet / Incomplet` selon `s.count`.
+Tout l'outil de recommandations vaccinales sera placé derrière la connexion. Un usager non connecté sera redirigé vers `/auth`. Après connexion, il est ramené à la page demandée.
 
----
+## 4. Page de gestion du profil `/profil`
 
-### 4) Typhoïde — rappels ✅ déjà OK
-Distinction Typhim (3 ans) vs Vivotif (7 ans) déjà gérée (l.1548‑1552). Rien à changer.
+L'usager peut consulter et modifier :
+- Nom complet (prénom, nom)
+- Profession (menu : MD, Pharm, Inf, IPS, autre)
+- Numéro de licence professionnelle
+- Téléphone
+- Établissement / organisation
+- Courriel (lecture seule ; changement via flux dédié)
+- Bouton "Changer mon mot de passe"
 
----
+## 5. Rôles et comptes administrateurs
 
-### 5) MPOX — ⚠️ à enrichir
-**Existant :** `'Mpox'(ctx)` (l.1516‑1521) — schéma 2 doses + 0/28 j seulement, sans catégorisation contextuelle.
+Deux administrateurs préconfigurés :
+- `guillaume.page09@gmail.com` — Guillaume Pagé — mot de passe initial `admin`
+- `noemie.duval@hotmail.com` — Noémie Duval — mot de passe initial `admin`
 
-**Patch :** lire `ctx.inspqText` et catégoriser :
-- `/risque.*sexuel|principalement.*sexuel/i` (transmission sexuelle uniquement) → **Mesures de protection personnelles** (lien INSPQ) ; mentionner mesures additionnelles si pays d'Afrique. Vaccination uniquement si groupe d'indications PIQ.
-- `/présence|active|épidémie|éclosion/i` → **vaccination à envisager / recommandée** pour : activités sexuelles avec partenaires locaux, contacts prolongés étroits (même toit), travailleurs santé en soins directs.
-- Statut **Complet** si 2 doses ; **Incomplet** si 1 dose ; ajouter mention **rappel q 2 ans pour travailleurs de laboratoire à haut risque d'exposition à un orthopoxvirus réplicatif** quand applicable (case à cocher existante `rg.labo` si disponible, sinon note explicative).
+Une bannière sur leur première connexion les invitera fortement à changer ce mot de passe (le mot de passe `admin` étant très faible, ceci est essentiel).
 
----
+## 6. Console administrateur `/admin`
 
-### 6) Encéphalite japonaise — ⚠️ à enrichir
-**Existant :** `'Encéphalite japonaise'(ctx)` (l.1576‑1586) → posologie seulement, rappel générique ≥1 an.
+Visible uniquement pour les administrateurs (lien dans le menu). Permet :
+- Lister tous les usagers (nom, courriel, profession, licence, établissement, date d'inscription, dernière connexion)
+- Recherche / filtre
+- Voir le détail d'un profil usager
+- **Réinitialiser le mot de passe** d'un usager : déclenche l'envoi d'un courriel de réinitialisation à cet usager. L'administrateur ne voit jamais le mot de passe (ni l'ancien, ni le nouveau).
+- Activer / désactiver un compte
+- Promouvoir un autre usager au rôle administrateur (optionnel, mais utile)
 
-**Patch :** introduire la **catégorisation** (cohérente avec le Jotform) :
-- Pays sans EJ → **Non requis** + commentaire « vaccin indiqué si séjour >1 mois en milieu rural en période de transmission ».
-- Pays avec EJ + court séjour urbain → **Non requis** + commentaire des cas où il aurait été recommandé.
-- Pays avec EJ + <1 mois rural + facteur de risque (éclosion / destination incertaine / activités à risque) → **À envisager** + commentaire des contextes.
-- Pays avec EJ + ≥1 mois rural en période de transmission → **Recommandé** + commentaire du motif.
-- Rappels : **12 mois après primovaccination** ; **10 ans après** si exposition persiste (remplace le « ≥ 1 an » actuel).
+## 7. Sécurité
 
-Source du contexte : nouveaux champs UI `q_ej_milieu` (rural/urbain), `q_ej_duree` (jours/mois), `q_ej_periode` (transmission oui/non), ou — si on ne veut pas toucher l'UI — questions inférées depuis `ctx.inspqText` + `daysToDep`. **Question pour toi : créer 3 nouveaux contrôles UI dans la section EJ, ou se contenter d'une heuristique texte ?**
+- Mots de passe hachés par le système d'authentification (jamais accessibles, même aux admins)
+- Rôles stockés dans une table séparée `user_roles` avec une fonction sécurisée `has_role()` — empêche l'élévation de privilèges
+- Politiques RLS strictes : un usager ne voit que son propre profil ; les admins voient tous les profils ; personne (ni admin ni usager) ne peut lire de hash de mot de passe
+- Activation de la vérification "mot de passe compromis" (Have I Been Pwned)
+- Validation des entrées (Zod) côté client et serveur
 
----
+## 8. Préparation à l'abonnement payant (planification seulement)
 
-### 7) Typhoïde — catégorisation ⚠️ à ajouter
-**Existant :** posologie OK, mais aucune logique « recommandé / à envisager / non requis » selon contexte.
+Aucun code de paiement n'est ajouté maintenant, mais le schéma de données prévoit déjà le terrain :
+- Champ `subscription_status` sur le profil (`free`, `active`, `past_due`, `canceled`)
+- Champ `subscription_plan` (null pour l'instant)
+- Champ `subscription_renews_at`
 
-**Patch :** lire `ctx.inspqText` + groupes de risque (existants : `rg.immuno`, `rg.asplenie`, `rg.gastrique` — ajouter ce dernier s'il manque) :
-- `/risque.*transmission.*élevé/i` + Asie du Sud → **Recommandé pour tous**.
-- `/risque.*intermédiaire|faible|indéterminé/i` + voyageur dans un groupe particulier (long séjour, hors circuits, VFR, contacts étroits, complications [enfants/aspléniques/immunosupprimés], défenses gastriques amoindries [IPP, anti‑H2, gastrectomie, achlorhydrie, vagotomie]) → **À envisager** + commentaire du contexte.
-- Complexe hôtelier tout-inclus + risque faible/intermédiaire/indéterminé → **Non requis** + commentaire.
-- Si nouvelle dose requise (dépassement délai) : afficher la dose précédente + barème de validité + recommandation de revaccination.
+Quand vous serez prêt à activer les paiements, l'approche recommandée sera **Stripe via l'intégration Lovable** (aucune clé API requise) :
+- Création de produits/plans (mensuel, annuel)
+- Page `/abonnement` avec checkout
+- Webhook qui met à jour automatiquement `subscription_status`
+- Protection des fonctionnalités premium par une vérification du statut
+Ceci sera fait dans une demande ultérieure.
 
-**Question : as‑tu déjà des cases UI pour « complexe tout-inclus », « VFR », « hors circuits », « long séjour », « défenses gastriques amoindries » ? Sinon, je les ajoute à la section Patient.**
+## Détails techniques
 
----
+- Auth : Lovable Cloud (Supabase sous le capot) avec `email/password`
+- Tables : `profiles` (liée à `auth.users` via FK cascade), `user_roles` (enum `app_role` = `admin` | `user`)
+- Trigger DB : création automatique d'une ligne `profiles` à l'inscription
+- Comptes admin créés via migration de données (utilisateurs + rôles)
+- Courriel : utilise le système d'authentification intégré de Lovable Cloud pour les liens de réinitialisation (pas besoin de configurer un domaine email pour cette étape)
+- Routes protégées via le layout `_authenticated` géré par l'intégration
+- Sous-route `_authenticated/_admin` avec vérification du rôle pour la console admin
 
-### 8) Choléra — catégorisation ⚠️ à ajouter
-**Patch :** dans `DECISION_TREES['Choléra']`, avant la branche posologique, ajouter :
-- Si pays sans présence choléra → **Non requis**.
-- Si présence + voyageur ≥2 ans + (pas d'accès eau potable ET contact étroit population indigente : coopérants, personnel santé, humanitaire en zones sinistrées/camps réfugiés) **OU** défenses gastriques amoindries → **À envisager**.
-- Sinon → **Non requis** (commentaire).
-- Délai dépassé → dose précédente + validité + recommandation.
+## Fichiers principaux à créer
 
-**Question : ajouter case UI « coopérant / humanitaire / personnel santé en zone sinistrée » ? Et case « défenses gastriques amoindries » (réutilisable pour typhoïde) ?**
-
----
-
-### 9) Chikungunya — ⚠️ correction âge
-**Existant :** ligne 1593 bloque <18 ans (« Ixchiq non homologué chez les mineurs »).
-
-**Patch :** changer le seuil à **12 ans** (récent élargissement Santé Canada). Conserver l'évaluation bénéfice/risque ≥65 ans.
-
----
-
-### 10) Méningocoque — ⚠️ à enrichir
-**Existant :** `'Méningocoque'(ctx)` (l.1620‑1640) détecte vaguement « ceinture africaine » et mentionne Bexsero/Trumenba.
-
-**Patch :**
-- **Saison sèche (novembre→juin)** dans ceinture → **Recommandé pour tous**.
-- **Saison humide (juillet→octobre)** dans ceinture OU hors ceinture → **À envisager** selon groupes : <30 ans peu importe durée, ≥30 ans avec contacts étroits/prolongés (hébergement, transports, soins santé, réfugiés, voyage d'aventure) ou long séjour (≥3 semaines).
-- **Exception explicite :** safaris courts (Kenya/Tanzanie) → pas d'indication par défaut.
-- **Autres régions :** envisager si épidémie/éclosion/hausse inhabituelle d'un sérogroupe vaccinal dans les 6 mois précédents.
-- **Hadj / Umrah / travail saisonnier Arabie saoudite → EXIGÉ** (mention certificat).
-- **Choix vaccin :** Men‑C seul ou ACYW interchangeables pour primo ; **Menjugate nécessite une dose supplémentaire** ; pour primovaccination à compléter, **préférer ACYW** (protection plus complète).
-- Mois courant déterminé via `new Date().getMonth()` pour le contexte saison sèche/humide.
-- Statut **Complet / Incomplet** + commentaire des contextes.
-
----
-
-### Hors scope
-
-Pas de modification au DB INSPQ, à la mise en page, au footer, au routeTree, au moteur d'import carnet, ni au tableau `DEFAULT_VOLUME_BY_PRODUCT`. Pas de nouvelles dépendances.
-
-### QA manuelle
-
-1. Pays avec polio sauvage (Afghanistan, Pakistan) → Polio affiche « rappel exigé 4 sem ≤ délai ≤ 12 mois ».
-2. Pays mpox transmission sexuelle (la plupart Amérique/Europe) → Mpox affiche « mesures protection personnelle » + condition vaccination groupe PIQ.
-3. Pays Afrique mpox actif (RDC) → Mpox affiche « vaccination recommandée pour activités sexuelles / contacts étroits / soignants ».
-4. Pays EJ + séjour rural >1 mois en saison → EJ « Recommandé ».
-5. Pays EJ + séjour urbain court → EJ « Non requis » + commentaire des cas indiqués.
-6. Inde tout-inclus + 0 facteur risque → Typhoïde « Non requis ».
-7. Inde + long séjour VFR → Typhoïde « Recommandé » (Asie du Sud risque élevé).
-8. Bangladesh + coopérant santé + pas d'accès eau potable → Choléra « À envisager ».
-9. Chikungunya patient 14 ans → posologie Ixchiq accessible (et non plus blocage <18).
-10. Arabie saoudite + Hadj → Méningocoque « Exigé » + mention certificat.
-11. Burkina Faso en janvier → Méningocoque « Recommandé pour tous (saison sèche) ».
-12. Burkina Faso en août → Méningocoque « À envisager » selon âge/durée.
-
----
-
-### Questions ouvertes avant build
-
-A. **Encéphalite japonaise :** créer 3 contrôles UI (milieu, durée, période) ou heuristique pure depuis le texte INSPQ ?
-B. **Typhoïde / Choléra :** ajouter des cases UI pour les groupes spécifiques (tout-inclus, VFR, coopérant/humanitaire, défenses gastriques amoindries), ou se baser uniquement sur les groupes de risque déjà existants ?
-C. **Mpox travailleurs de laboratoire :** ajouter une case UI dédiée, ou se contenter d'une note conditionnelle dans le texte de sortie ?
-
-Réponds A/B/C (ou « tu décides » pour que je tranche au plus simple) et je passe en mode build.
+```text
+src/routes/auth.tsx                          # Connexion / inscription / mot de passe oublié
+src/routes/reset-password.tsx                # Définir nouveau mot de passe
+src/routes/_authenticated/profil.tsx         # Gestion du profil
+src/routes/_authenticated/_admin/admin.tsx   # Console administrateur (liste usagers)
+src/routes/_authenticated/_admin/route.tsx   # Gate de rôle admin
+src/lib/profile.functions.ts                 # Server fns lecture/écriture profil
+src/lib/admin.functions.ts                   # Server fns admin (liste users, reset pwd)
++ migrations DB pour profiles, user_roles, has_role, RLS, trigger, comptes admin
+```
