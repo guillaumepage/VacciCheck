@@ -9,8 +9,7 @@ export async function renderPdfToImages(
   // Dynamic import keeps pdfjs out of SSR bundles.
   const pdfjs = await import("pdfjs-dist");
   // Worker setup — bundled by Vite.
-  // @ts-expect-error worker module URL
-  const workerSrc = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+  const workerSrc = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url" as string)).default as string;
   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
   const buf = await file.arrayBuffer();

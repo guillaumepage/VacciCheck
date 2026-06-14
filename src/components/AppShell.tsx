@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
-import { Shield, User as UserIcon, LogOut, Users as UsersIcon } from "lucide-react";
+import { Shield, User as UserIcon, LogOut, Users as UsersIcon, Stethoscope } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, signOut } = useAuth();
@@ -23,6 +23,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             VaxConseil
           </Link>
           <nav className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/vaccicheck"><Stethoscope className="h-4 w-4" />VacciCheck</Link>
+            </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/profil"><UserIcon className="h-4 w-4" />Profil</Link>
             </Button>

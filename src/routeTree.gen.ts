@@ -13,6 +13,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedVaccicheckRouteImport } from './routes/_authenticated/vaccicheck'
 import { Route as AuthenticatedProfilRouteImport } from './routes/_authenticated/profil'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ApiPublicInitAdminsRouteImport } from './routes/api/public/init-admins'
@@ -34,6 +35,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedVaccicheckRoute = AuthenticatedVaccicheckRouteImport.update({
+  id: '/vaccicheck',
+  path: '/vaccicheck',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedProfilRoute = AuthenticatedProfilRouteImport.update({
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/profil': typeof AuthenticatedProfilRoute
+  '/vaccicheck': typeof AuthenticatedVaccicheckRoute
   '/api/public/init-admins': typeof ApiPublicInitAdminsRoute
 }
 export interface FileRoutesByTo {
@@ -65,6 +72,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/profil': typeof AuthenticatedProfilRoute
+  '/vaccicheck': typeof AuthenticatedVaccicheckRoute
   '/': typeof AuthenticatedIndexRoute
   '/api/public/init-admins': typeof ApiPublicInitAdminsRoute
 }
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/profil': typeof AuthenticatedProfilRoute
+  '/_authenticated/vaccicheck': typeof AuthenticatedVaccicheckRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/api/public/init-admins': typeof ApiPublicInitAdminsRoute
 }
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin'
     | '/profil'
+    | '/vaccicheck'
     | '/api/public/init-admins'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin'
     | '/profil'
+    | '/vaccicheck'
     | '/'
     | '/api/public/init-admins'
   id:
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_authenticated/admin'
     | '/_authenticated/profil'
+    | '/_authenticated/vaccicheck'
     | '/_authenticated/'
     | '/api/public/init-admins'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/vaccicheck': {
+      id: '/_authenticated/vaccicheck'
+      path: '/vaccicheck'
+      fullPath: '/vaccicheck'
+      preLoaderRoute: typeof AuthenticatedVaccicheckRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/profil': {
       id: '/_authenticated/profil'
       path: '/profil'
@@ -170,12 +189,14 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedProfilRoute: typeof AuthenticatedProfilRoute
+  AuthenticatedVaccicheckRoute: typeof AuthenticatedVaccicheckRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedProfilRoute: AuthenticatedProfilRoute,
+  AuthenticatedVaccicheckRoute: AuthenticatedVaccicheckRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 
