@@ -23,9 +23,12 @@ function Home() {
             <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2">
               <Stethoscope className="h-5 w-5" />
             </div>
-            <CardTitle>Outil de recommandations</CardTitle>
-            <CardDescription>Bientôt disponible dans cette interface intégrée.</CardDescription>
+            <CardTitle>VacciCheck</CardTitle>
+            <CardDescription>Téléverse un carnet de vaccination PDF et extrait toutes les entrées avec l'IA.</CardDescription>
           </CardHeader>
+          <CardContent>
+            <Button asChild size="sm"><Link to="/vaccicheck">Ouvrir VacciCheck</Link></Button>
+          </CardContent>
         </Card>
 
         <Card className="hover:shadow-md transition-shadow">
