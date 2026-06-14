@@ -1,98 +1,104 @@
 
-# Plan : Authentification, profils utilisateurs et rôles administratifs
+# Extraction PDF de carnet de vaccination via Vision LLM
 
-## Vue d'ensemble
+## Objectif
 
-Mise en place d'un système de connexion complet sur le site, avec gestion de profil, deux comptes administrateurs prédéfinis, et fondations pour un futur abonnement payant.
+Remplacer (ou (re)bâtir) l'extraction PDF de VacciCheck par un pipeline qui rend chaque page PDF en image, demande à un LLM multimodal de retourner un **tableau Markdown structuré** du carnet, puis parse ce Markdown en entrées vaccinales. Objectif : zéro entrée manquante et noms commerciaux toujours capturés (Sabin/VPO, Quadracel, D25CT5 ACT-HIB, Arepanrix H1N1, Vaxigrip, etc.).
 
-## 1. Activation de Lovable Cloud
+## Pourquoi cette approche
 
-Lovable Cloud sera activé pour fournir la base de données, l'authentification et l'envoi des courriels de réinitialisation. Aucun compte externe n'est requis.
+- L'extraction texte directe (pdf-parse/pdfplumber) regroupe mal les lignes des tableaux denses → entrées et colonnes "Nom commercial" sautées.
+- Un LLM vision lit la mise en page comme un humain, ne perd pas les lignes serrées et reconnaît les noms commerciaux écrits en petit ou en marge.
+- Markdown intermédiaire = format déterministe, facile à parser et à inspecter pour debug.
 
-## 2. Page d'authentification `/auth`
+## Architecture
 
-Design soigné et professionnel, cohérent avec le reste du site (palette médicale propre, formulaires épurés, états de chargement, messages d'erreur clairs en français). Elle comprend trois onglets/vues :
-
-- **Connexion** : courriel + mot de passe
-- **Création de compte** : courriel, mot de passe, prénom, nom (le profil détaillé se complète ensuite)
-- **Mot de passe oublié** : champ courriel → envoie un lien de réinitialisation
-
-Une page `/reset-password` permettra à l'usager de définir un nouveau mot de passe après avoir cliqué sur le lien reçu par courriel.
-
-## 3. Protection de l'application
-
-Tout l'outil de recommandations vaccinales sera placé derrière la connexion. Un usager non connecté sera redirigé vers `/auth`. Après connexion, il est ramené à la page demandée.
-
-## 4. Page de gestion du profil `/profil`
-
-L'usager peut consulter et modifier :
-- Nom complet (prénom, nom)
-- Profession (menu : MD, Pharm, Inf, IPS, autre)
-- Numéro de licence professionnelle
-- Téléphone
-- Établissement / organisation
-- Courriel (lecture seule ; changement via flux dédié)
-- Bouton "Changer mon mot de passe"
-
-## 5. Rôles et comptes administrateurs
-
-Deux administrateurs préconfigurés :
-- `guillaume.page09@gmail.com` — Guillaume Pagé — mot de passe initial `admin`
-- `noemie.duval@hotmail.com` — Noémie Duval — mot de passe initial `admin`
-
-Une bannière sur leur première connexion les invitera fortement à changer ce mot de passe (le mot de passe `admin` étant très faible, ceci est essentiel).
-
-## 6. Console administrateur `/admin`
-
-Visible uniquement pour les administrateurs (lien dans le menu). Permet :
-- Lister tous les usagers (nom, courriel, profession, licence, établissement, date d'inscription, dernière connexion)
-- Recherche / filtre
-- Voir le détail d'un profil usager
-- **Réinitialiser le mot de passe** d'un usager : déclenche l'envoi d'un courriel de réinitialisation à cet usager. L'administrateur ne voit jamais le mot de passe (ni l'ancien, ni le nouveau).
-- Activer / désactiver un compte
-- Promouvoir un autre usager au rôle administrateur (optionnel, mais utile)
-
-## 7. Sécurité
-
-- Mots de passe hachés par le système d'authentification (jamais accessibles, même aux admins)
-- Rôles stockés dans une table séparée `user_roles` avec une fonction sécurisée `has_role()` — empêche l'élévation de privilèges
-- Politiques RLS strictes : un usager ne voit que son propre profil ; les admins voient tous les profils ; personne (ni admin ni usager) ne peut lire de hash de mot de passe
-- Activation de la vérification "mot de passe compromis" (Have I Been Pwned)
-- Validation des entrées (Zod) côté client et serveur
-
-## 8. Préparation à l'abonnement payant (planification seulement)
-
-Aucun code de paiement n'est ajouté maintenant, mais le schéma de données prévoit déjà le terrain :
-- Champ `subscription_status` sur le profil (`free`, `active`, `past_due`, `canceled`)
-- Champ `subscription_plan` (null pour l'instant)
-- Champ `subscription_renews_at`
-
-Quand vous serez prêt à activer les paiements, l'approche recommandée sera **Stripe via l'intégration Lovable** (aucune clé API requise) :
-- Création de produits/plans (mensuel, annuel)
-- Page `/abonnement` avec checkout
-- Webhook qui met à jour automatiquement `subscription_status`
-- Protection des fonctionnalités premium par une vérification du statut
-Ceci sera fait dans une demande ultérieure.
+```text
+Client (upload PDF)
+   └─► serverFn extractVaccinationCarnet (createServerFn, requireSupabaseAuth)
+         ├─ pdf → images (1 par page) via pdfjs-dist (rendu canvas en mémoire)
+         ├─ Pour chaque page : appel Lovable AI Gateway
+         │     model: google/gemini-2.5-pro (vision, qualité tableaux)
+         │     prompt: "Retourne UNIQUEMENT un tableau Markdown avec colonnes :
+         │              Date | Vaccin (nom générique) | Nom commercial | Lot | Site | Dose | Notes"
+         │     input: image_url base64 de la page
+         ├─ Concatène les Markdown de toutes les pages
+         ├─ Parse le Markdown (split lignes |, normalise dates, dédoublonne en-têtes répétés)
+         ├─ Post-traitement règles métier (ex: DCaT 1994-1995 → D25CT5 ACT-HIB si manquant)
+         └─ Retourne { entries: VaccineEntry[], rawMarkdown: string }
+   ◄── UI affiche tableau éditable + bouton "Voir Markdown brut" pour QA
+```
 
 ## Détails techniques
 
-- Auth : Lovable Cloud (Supabase sous le capot) avec `email/password`
-- Tables : `profiles` (liée à `auth.users` via FK cascade), `user_roles` (enum `app_role` = `admin` | `user`)
-- Trigger DB : création automatique d'une ligne `profiles` à l'inscription
-- Comptes admin créés via migration de données (utilisateurs + rôles)
-- Courriel : utilise le système d'authentification intégré de Lovable Cloud pour les liens de réinitialisation (pas besoin de configurer un domaine email pour cette étape)
-- Routes protégées via le layout `_authenticated` géré par l'intégration
-- Sous-route `_authenticated/_admin` avec vérification du rôle pour la console admin
+### Rendu PDF → images
+- Lib : `pdfjs-dist` (compatible Cloudflare Worker via build legacy/ESM). Rendu à 200 DPI pour lisibilité.
+- Si `pdfjs-dist` pose problème dans le Worker, fallback : faire le rendu **côté client** (le navigateur a déjà `pdfjs-dist`), envoyer les images base64 au serverFn. Préférable d'ailleurs : économise la RAM du Worker et évite les limites de taille.
 
-## Fichiers principaux à créer
+**Décision recommandée : rendu côté client, parsing IA côté serveur.**
 
-```text
-src/routes/auth.tsx                          # Connexion / inscription / mot de passe oublié
-src/routes/reset-password.tsx                # Définir nouveau mot de passe
-src/routes/_authenticated/profil.tsx         # Gestion du profil
-src/routes/_authenticated/_admin/admin.tsx   # Console administrateur (liste usagers)
-src/routes/_authenticated/_admin/route.tsx   # Gate de rôle admin
-src/lib/profile.functions.ts                 # Server fns lecture/écriture profil
-src/lib/admin.functions.ts                   # Server fns admin (liste users, reset pwd)
-+ migrations DB pour profiles, user_roles, has_role, RLS, trigger, comptes admin
+### Appel Lovable AI Gateway
+- Endpoint : `https://ai.gateway.lovable.dev/v1/chat/completions`
+- Header : `Lovable-API-Key: ${process.env.LOVABLE_API_KEY}` (jamais exposé au client)
+- Modèle : `google/gemini-2.5-pro` (meilleur sur tableaux + multilingue FR). Option économique : `google/gemini-3-flash-preview`.
+- Message multimodal avec `{type:"image_url", image_url:{url:"data:image/png;base64,..."}}`
+- Prompt système strict : "Tu reçois la page d'un carnet de vaccination québécois. Retourne UNIQUEMENT un tableau Markdown sans texte additionnel. N'invente jamais une entrée. Si une cellule est illisible, mets `?`."
+- Parallélisation : pages en parallèle avec `Promise.all` (limite à 4 en concurrence pour éviter 429).
+
+### Parsing du Markdown
+- Regex sur lignes commençant/finissant par `|`
+- Normalisation date : multi-formats (`12/10/1994`, `1994-10-12`, `12 oct 1994`)
+- Mapping nom générique → nom commercial avec règles métier (table `vaccine_commercial_rules` en DB pour évolutivité).
+
+### Schéma DB (nouveau)
+```sql
+create table public.vaccine_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users not null,
+  carnet_id uuid not null,
+  given_at date,
+  vaccine_generic text,
+  commercial_name text,
+  lot text,
+  site text,
+  dose text,
+  notes text,
+  created_at timestamptz default now()
+);
+-- + GRANT + RLS (user_id = auth.uid())
+
+create table public.vaccine_carnets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users not null,
+  source_filename text,
+  raw_markdown text,
+  page_count int,
+  created_at timestamptz default now()
+);
+-- + GRANT + RLS
 ```
+
+### Fichiers à créer
+- `src/lib/pdf-render.client.ts` — rendu pdfjs côté navigateur, retourne `string[]` de data URLs
+- `src/lib/vaccine-extract.functions.ts` — serverFn `extractVaccinationCarnet({ pageImages: string[] })`
+- `src/lib/vaccine-rules.server.ts` — règles métier de mapping commercial
+- `src/routes/_authenticated/vaccicheck.tsx` — page upload + résultats + Markdown brut (QA)
+- Migration Supabase pour les 2 tables ci-dessus
+
+## QA et garde-fous
+
+- Affichage côté UI du Markdown brut retourné par l'IA (panneau dépliable) pour que tu puisses vérifier visuellement.
+- Compteur "X entrées extraites" vs nombre que tu attendais (champ d'entrée optionnel pour signaler les écarts).
+- Tests sur le PDF problématique (41 entrées attendues). Objectif : ≥ 40/41 sans intervention manuelle.
+
+## Coût et performance
+
+- ~2-5 secondes par page avec Gemini 2.5 Pro, ~0.5-1 s avec Flash.
+- Coût : facturé sur crédits Lovable AI (visible dans Settings → Usage).
+- Pas de clé externe à fournir : Lovable AI Gateway est déjà configuré.
+
+## Hors scope (pour plus tard)
+
+- OCR de PDF scannés purs (l'approche vision fonctionne déjà dessus, donc pas de travail supplémentaire).
+- Comparaison automatique avec calendrier vaccinal québécois (étape suivante, après extraction fiable).
+

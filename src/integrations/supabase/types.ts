@@ -86,6 +86,95 @@ export type Database = {
         }
         Relationships: []
       }
+      vaccine_carnets: {
+        Row: {
+          created_at: string
+          expected_entries: number | null
+          id: string
+          page_count: number | null
+          raw_markdown: string | null
+          source_filename: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expected_entries?: number | null
+          id?: string
+          page_count?: number | null
+          raw_markdown?: string | null
+          source_filename?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expected_entries?: number | null
+          id?: string
+          page_count?: number | null
+          raw_markdown?: string | null
+          source_filename?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vaccine_entries: {
+        Row: {
+          carnet_id: string
+          commercial_name: string | null
+          created_at: string
+          dose: string | null
+          given_at: string | null
+          id: string
+          lot: string | null
+          notes: string | null
+          page_number: number | null
+          site: string | null
+          updated_at: string
+          user_id: string
+          vaccine_generic: string | null
+        }
+        Insert: {
+          carnet_id: string
+          commercial_name?: string | null
+          created_at?: string
+          dose?: string | null
+          given_at?: string | null
+          id?: string
+          lot?: string | null
+          notes?: string | null
+          page_number?: number | null
+          site?: string | null
+          updated_at?: string
+          user_id: string
+          vaccine_generic?: string | null
+        }
+        Update: {
+          carnet_id?: string
+          commercial_name?: string | null
+          created_at?: string
+          dose?: string | null
+          given_at?: string | null
+          id?: string
+          lot?: string | null
+          notes?: string | null
+          page_number?: number | null
+          site?: string | null
+          updated_at?: string
+          user_id?: string
+          vaccine_generic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vaccine_entries_carnet_id_fkey"
+            columns: ["carnet_id"]
+            isOneToOne: false
+            referencedRelation: "vaccine_carnets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
