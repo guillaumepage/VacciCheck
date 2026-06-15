@@ -1,104 +1,81 @@
-
-# Extraction PDF de carnet de vaccination via Vision LLM
+# Intégration de l'extraction PDF par IA dans VacciCheck
 
 ## Objectif
 
-Remplacer (ou (re)bâtir) l'extraction PDF de VacciCheck par un pipeline qui rend chaque page PDF en image, demande à un LLM multimodal de retourner un **tableau Markdown structuré** du carnet, puis parse ce Markdown en entrées vaccinales. Objectif : zéro entrée manquante et noms commerciaux toujours capturés (Sabin/VPO, Quadracel, D25CT5 ACT-HIB, Arepanrix H1N1, Vaxigrip, etc.).
+Remplacer l'extraction de texte naïve (`pdfjs.getTextContent`) par une lecture visuelle par IA (Gemini 2.5 Pro), **tout en conservant intégralement** la logique métier québécoise déjà présente dans le HTML (`parseQuebecCarnet`, `COMMERCIAL_MAP`, `QC_CODE_MAP`, dérivation des doses, détection nom/DDN, etc.).
+
+## Principe
+
+L'IA produit le **même format de sortie que `extractPdfLines` aujourd'hui** : un tableau de lignes (`string[]`) avec `__PAGE_BREAK__` entre les pages. Tout le reste du moteur de VacciCheck continue de fonctionner sans modification.
+
+```
+PDF → pdf.js rendu canvas (iframe) → images base64
+    → postMessage(parent) → serverFn → Gemini Vision
+    → string[] (lignes propres) → postMessage(iframe)
+    → parseQuebecCarnet(lines)   [code existant, inchangé]
+    → state.vaccineEntries       [code existant, inchangé]
+```
 
 ## Pourquoi cette approche
 
-- L'extraction texte directe (pdf-parse/pdfplumber) regroupe mal les lignes des tableaux denses → entrées et colonnes "Nom commercial" sautées.
-- Un LLM vision lit la mise en page comme un humain, ne perd pas les lignes serrées et reconnaît les noms commerciaux écrits en petit ou en marge.
-- Markdown intermédiaire = format déterministe, facile à parser et à inspecter pour debug.
+- **Préserve 1500 lignes de logique québécoise** déjà éprouvée (mapping antigènes, demi-doses, polio extraits, etc.).
+- **Iframe inchangé visuellement** — tu retrouves ton site exact.
+- **Seul `extractPdfLines` est remplacé** : c'est lui qui causait les entrées manquantes dans les tableaux denses.
 
-## Architecture
+## Architecture technique
 
-```text
-Client (upload PDF)
-   └─► serverFn extractVaccinationCarnet (createServerFn, requireSupabaseAuth)
-         ├─ pdf → images (1 par page) via pdfjs-dist (rendu canvas en mémoire)
-         ├─ Pour chaque page : appel Lovable AI Gateway
-         │     model: google/gemini-2.5-pro (vision, qualité tableaux)
-         │     prompt: "Retourne UNIQUEMENT un tableau Markdown avec colonnes :
-         │              Date | Vaccin (nom générique) | Nom commercial | Lot | Site | Dose | Notes"
-         │     input: image_url base64 de la page
-         ├─ Concatène les Markdown de toutes les pages
-         ├─ Parse le Markdown (split lignes |, normalise dates, dédoublonne en-têtes répétés)
-         ├─ Post-traitement règles métier (ex: DCaT 1994-1995 → D25CT5 ACT-HIB si manquant)
-         └─ Retourne { entries: VaccineEntry[], rawMarkdown: string }
-   ◄── UI affiche tableau éditable + bouton "Voir Markdown brut" pour QA
-```
+### 1. Côté iframe (`public/vaccicheck-app.html`)
 
-## Détails techniques
+Modifier deux endroits seulement :
 
-### Rendu PDF → images
-- Lib : `pdfjs-dist` (compatible Cloudflare Worker via build legacy/ESM). Rendu à 200 DPI pour lisibilité.
-- Si `pdfjs-dist` pose problème dans le Worker, fallback : faire le rendu **côté client** (le navigateur a déjà `pdfjs-dist`), envoyer les images base64 au serverFn. Préférable d'ailleurs : économise la RAM du Worker et évite les limites de taille.
+- **`extractPdfLines(file)`** : rendre chaque page PDF en image base64 via canvas (pdf.js est déjà chargé), puis envoyer un message au parent et attendre la réponse :
+  ```js
+  async function extractPdfLines(file){
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+    const images = [];
+    for(let p=1; p<=pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const vp = page.getViewport({scale: 2});
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.85));
+    }
+    // postMessage + Promise resolved par listener
+    return await requestAiExtract(images);
+  }
+  ```
+- Ajouter `requestAiExtract(images)` qui poste `{type:'vc:extract', id, images}` à `window.parent` et résout la Promise quand le parent répond `{type:'vc:extract:result', id, lines}`.
 
-**Décision recommandée : rendu côté client, parsing IA côté serveur.**
+### 2. Côté route React (`src/routes/_authenticated/vaccicheck.tsx`)
 
-### Appel Lovable AI Gateway
-- Endpoint : `https://ai.gateway.lovable.dev/v1/chat/completions`
-- Header : `Lovable-API-Key: ${process.env.LOVABLE_API_KEY}` (jamais exposé au client)
-- Modèle : `google/gemini-2.5-pro` (meilleur sur tableaux + multilingue FR). Option économique : `google/gemini-3-flash-preview`.
-- Message multimodal avec `{type:"image_url", image_url:{url:"data:image/png;base64,..."}}`
-- Prompt système strict : "Tu reçois la page d'un carnet de vaccination québécois. Retourne UNIQUEMENT un tableau Markdown sans texte additionnel. N'invente jamais une entrée. Si une cellule est illisible, mets `?`."
-- Parallélisation : pages en parallèle avec `Promise.all` (limite à 4 en concurrence pour éviter 429).
+Ajouter un `useEffect` qui écoute les messages de l'iframe, appelle la server fn `extractCarnetLines` (auth déjà attachée par `attachSupabaseAuth`), et renvoie le résultat dans l'iframe.
 
-### Parsing du Markdown
-- Regex sur lignes commençant/finissant par `|`
-- Normalisation date : multi-formats (`12/10/1994`, `1994-10-12`, `12 oct 1994`)
-- Mapping nom générique → nom commercial avec règles métier (table `vaccine_commercial_rules` en DB pour évolutivité).
+### 3. Server function (`src/lib/vaccine-extract.functions.ts`)
 
-### Schéma DB (nouveau)
-```sql
-create table public.vaccine_entries (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users not null,
-  carnet_id uuid not null,
-  given_at date,
-  vaccine_generic text,
-  commercial_name text,
-  lot text,
-  site text,
-  dose text,
-  notes text,
-  created_at timestamptz default now()
-);
--- + GRANT + RLS (user_id = auth.uid())
+Remplacer la fn existante (qui renvoyait un format custom) par `extractCarnetLines({ pageImages })` qui :
+- Pour chaque image, appelle Lovable AI Gateway (Gemini 2.5 Pro vision) en parallèle (max 4 simultanés)
+- Prompt système : « Reproduis chaque ligne du tableau de vaccination telle quelle, un vaccin par ligne, avec date, antigène/produit, lot, volume, site, notes — sans rien fusionner ni omettre. Pas de Markdown, juste du texte brut. »
+- Renvoie `string[]` aplati avec `'__PAGE_BREAK__'` entre les pages
+- Persiste dans `vaccine_carnets` (texte brut concaténé) pour QA, comme aujourd'hui — protégé par `requireSupabaseAuth`
 
-create table public.vaccine_carnets (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users not null,
-  source_filename text,
-  raw_markdown text,
-  page_count int,
-  created_at timestamptz default now()
-);
--- + GRANT + RLS
-```
+### 4. Nettoyage
 
-### Fichiers à créer
-- `src/lib/pdf-render.client.ts` — rendu pdfjs côté navigateur, retourne `string[]` de data URLs
-- `src/lib/vaccine-extract.functions.ts` — serverFn `extractVaccinationCarnet({ pageImages: string[] })`
-- `src/lib/vaccine-rules.server.ts` — règles métier de mapping commercial
-- `src/routes/_authenticated/vaccicheck.tsx` — page upload + résultats + Markdown brut (QA)
-- Migration Supabase pour les 2 tables ci-dessus
+- Supprimer `src/lib/pdf-render.client.ts` (devenu inutile, le rendu se fait dans l'iframe).
+- Désinstaller `pdfjs-dist` côté React (toujours présent dans l'iframe via le bundle inline du HTML).
+- Garder les tables `vaccine_carnets` / `vaccine_entries` pour l'historique futur — pas de migration ici.
 
-## QA et garde-fous
+## Coût attendu par carnet
 
-- Affichage côté UI du Markdown brut retourné par l'IA (panneau dépliable) pour que tu puisses vérifier visuellement.
-- Compteur "X entrées extraites" vs nombre que tu attendais (champ d'entrée optionnel pour signaler les écarts).
-- Tests sur le PDF problématique (41 entrées attendues). Objectif : ≥ 40/41 sans intervention manuelle.
+Carnet typique 4–6 pages → 4–6 appels Gemini 2.5 Pro vision en parallèle → environ **0,02 à 0,05 $ par carnet** sur l'AI balance. Le 1 $ gratuit mensuel couvre donc 20 à 50 carnets sans recharge.
 
-## Coût et performance
+## Hors périmètre
 
-- ~2-5 secondes par page avec Gemini 2.5 Pro, ~0.5-1 s avec Flash.
-- Coût : facturé sur crédits Lovable AI (visible dans Settings → Usage).
-- Pas de clé externe à fournir : Lovable AI Gateway est déjà configuré.
+- Pas de modification visuelle de l'app VacciCheck (le HTML reste identique).
+- Pas de re-écriture en React de la logique métier.
+- Pas de système de cache : chaque upload re-appelle l'IA (à voir plus tard si besoin).
 
-## Hors scope (pour plus tard)
+## Critère de succès
 
-- OCR de PDF scannés purs (l'approche vision fonctionne déjà dessus, donc pas de travail supplémentaire).
-- Comparaison automatique avec calendrier vaccinal québécois (étape suivante, après extraction fiable).
-
+Le PDF de 41 entrées qui posait problème extrait désormais **41 entrées** (ou un nombre proche), visibles dans le tableau VacciCheck comme avant — sans changer aucun comportement aval (recommandations, demi-doses, etc.).
