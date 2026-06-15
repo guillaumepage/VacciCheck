@@ -746,27 +746,52 @@ function updateAgeAt(i){
 }
 
 /* ===== PDF Import (Quebec carnet) ===== */
-async function extractPdfLines(file){
+// Ask the parent React app to run AI vision extraction on rendered pages.
+function requestAiExtract(filename, images){
+  return new Promise((resolve, reject)=>{
+    if(window.parent === window) return reject(new Error("Hors application : impossible d'appeler l'IA."));
+    const id = 'vc_' + Math.random().toString(36).slice(2);
+    const timeout = setTimeout(()=>{
+      window.removeEventListener('message', onMsg);
+      reject(new Error("Pas de réponse de l'IA (timeout)."));
+    }, 120000);
+    function onMsg(ev){
+      const d = ev.data;
+      if(!d || d.type !== 'vc:extract:result' || d.id !== id) return;
+      clearTimeout(timeout);
+      window.removeEventListener('message', onMsg);
+      if(d.ok) resolve(d.lines);
+      else reject(new Error(d.error || "Erreur d'extraction IA."));
+    }
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({type:'vc:extract', id, filename, images}, '*');
+  });
+}
+
+async function renderPdfToImages(file, onProgress){
   if(!window.pdfjsLib) throw new Error("PDF.js non chargé");
-  const buf=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-  const allLines=[];
-  for(let p=1;p<=pdf.numPages;p++){
-    const page=await pdf.getPage(p);
-    const tc=await page.getTextContent();
-    const rows=new Map();
-    tc.items.forEach(it=>{ if(!it.str||!it.str.trim()) return;
-      const key=Math.round(it.transform[5]/3)*3;
-      if(!rows.has(key)) rows.set(key,[]);
-      rows.get(key).push({x:it.transform[4],s:it.str});
-    });
-    [...rows.keys()].sort((a,b)=>b-a).forEach(k=>{
-      const line=rows.get(k).sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim();
-      if(line) allLines.push(line);
-    });
-    if(p<pdf.numPages) allLines.push('__PAGE_BREAK__');
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  const images = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    if(onProgress) onProgress(p, pdf.numPages);
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({scale: 2});
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
+    images.push(canvas.toDataURL('image/jpeg', 0.85));
   }
-  return allLines;
+  return images;
+}
+
+async function extractPdfLines(file){
+  const status = document.getElementById('pdfStatus');
+  const images = await renderPdfToImages(file, (p,n)=>{
+    if(status) status.textContent = `Rendu PDF… page ${p}/${n}`;
+  });
+  if(status) status.textContent = `Analyse IA des ${images.length} page(s)… (cela peut prendre 10–30 s)`;
+  return await requestAiExtract(file.name || 'carnet.pdf', images);
 }
 
 const QC_CODE_MAP = [
