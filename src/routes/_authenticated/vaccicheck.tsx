@@ -1,12 +1,53 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { extractCarnetLines } from "@/lib/vaccine-extract.functions";
 
 export const Route = createFileRoute("/_authenticated/vaccicheck")({
   component: VacciCheckPage,
 });
 
+type ExtractRequest = {
+  type: "vc:extract";
+  id: string;
+  filename: string;
+  images: string[];
+};
+
 function VacciCheckPage() {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const extract = useServerFn(extractCarnetLines);
+
+  useEffect(() => {
+    const handler = async (ev: MessageEvent) => {
+      const data = ev.data as ExtractRequest | undefined;
+      if (!data || data.type !== "vc:extract") return;
+      const iframe = iframeRef.current;
+      if (!iframe || ev.source !== iframe.contentWindow) return;
+
+      const reply = (payload: Record<string, unknown>) => {
+        iframe.contentWindow?.postMessage(
+          { type: "vc:extract:result", id: data.id, ...payload },
+          window.location.origin,
+        );
+      };
+
+      try {
+        const result = await extract({
+          data: { filename: data.filename, pageImages: data.images },
+        });
+        reply({ ok: true, lines: result.lines });
+      } catch (err) {
+        reply({ ok: false, error: err instanceof Error ? err.message : "Erreur inconnue" });
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [extract]);
+
   return (
     <iframe
+      ref={iframeRef}
       src="/vaccicheck-app.html"
       title="VacciCheck"
       className="w-screen border-0 -mx-4"
