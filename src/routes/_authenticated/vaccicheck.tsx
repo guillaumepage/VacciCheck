@@ -6,13 +6,11 @@ export const Route = createFileRoute("/_authenticated/vaccicheck")({
 
 function VacciCheckPage() {
   return (
-    <div className="-m-4 sm:-m-6 lg:-m-8 h-[calc(100vh-4rem)]">
-      <iframe
-        src="/vaccicheck-app.html"
-        title="VacciCheck"
-        className="w-full h-full border-0"
-        // sandbox left permissive so embedded pdf.js + scripts run
-      />
-    </div>
+    <iframe
+      src="/vaccicheck-app.html"
+      title="VacciCheck"
+      className="w-screen border-0 -mx-4"
+      style={{ height: "calc(100vh - 3.5rem - 4rem)", width: "calc(100% + 2rem)" }}
+    />
   );
 }
