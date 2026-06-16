@@ -24,11 +24,16 @@ function VacciCheckPage() {
       if (!data || data.type !== "vc:extract") return;
       const iframe = iframeRef.current;
       if (!iframe || ev.source !== iframe.contentWindow) return;
+      console.log("[VacciCheck] demande extraction reçue", {
+        id: data.id,
+        filename: data.filename,
+        pages: data.images.length,
+      });
 
       const reply = (payload: Record<string, unknown>) => {
         iframe.contentWindow?.postMessage(
           { type: "vc:extract:result", id: data.id, ...payload },
-          window.location.origin,
+          "*",
         );
       };
 
@@ -36,8 +41,10 @@ function VacciCheckPage() {
         const result = await extract({
           data: { filename: data.filename, pageImages: data.images },
         });
+        console.log("[VacciCheck] extraction IA terminée", { id: data.id, lines: result.lines.length });
         reply({ ok: true, lines: result.lines });
       } catch (err) {
+        console.error("[VacciCheck] extraction IA échouée", err);
         reply({ ok: false, error: err instanceof Error ? err.message : "Erreur inconnue" });
       }
     };

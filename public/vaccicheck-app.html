@@ -225,6 +225,10 @@ details[open] .carnet-chevron{transform:rotate(180deg)}
               <label for="pdfFile">Importer un PDF (Carnet de santé Québec)</label>
               <input type="file" id="pdfFile" accept="application/pdf"/>
               <div class="hint" id="pdfStatus">Aucune donnée personnelle n'est envoyée à l'extérieur du navigateur.</div>
+              <details id="aiLinesDetails" style="display:none;margin-top:.5rem">
+                <summary class="hint" style="cursor:pointer">Texte lu par l'IA</summary>
+                <pre id="aiRawLines" style="white-space:pre-wrap;max-height:12rem;overflow:auto;margin-top:.35rem;padding:.55rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:.78rem;line-height:1.35"></pre>
+              </details>
             </div>
             <div id="vaccineRows"></div>
             <button type="button" id="btnAddVacc" class="small-btn primary" style="margin-top:.6rem">+ Ajouter une entrée</button>
@@ -1148,9 +1152,16 @@ function toInitials(name){
 
 async function handlePdfImport(file){
   const status = document.getElementById('pdfStatus');
+  const carnetDetails = document.getElementById('carnetDetails');
+  if(carnetDetails) carnetDetails.open = true;
   status.textContent = 'Lecture du PDF…';
   try{
     const lines = await extractPdfLines(file);
+    console.log('[VacciCheck] lignes IA reçues', lines);
+    const aiDetails = document.getElementById('aiLinesDetails');
+    const aiRaw = document.getElementById('aiRawLines');
+    if(aiRaw) aiRaw.textContent = lines.length ? lines.join('\n') : '(aucune ligne retournée)';
+    if(aiDetails) aiDetails.style.display = 'block';
     const parsed = parseQuebecCarnet(lines);
     if(parsed.fullName){
       patientName.value = toInitials(parsed.fullName);
@@ -1164,9 +1175,12 @@ async function handlePdfImport(file){
     state.vaccineEntries = parsed.entries;
     // Auto-derive halfDose + ageAt
     state.vaccineEntries.forEach((e,i)=>{ deriveHalfDose(e); updateAgeAt(i); });
-    status.textContent = `${parsed.entries.length} entrée(s) extraite(s)${parsed.dob?' — date de naissance détectée':''}. Carnet replié pour libérer l'espace.`;
+    status.textContent = parsed.entries.length
+      ? `${parsed.entries.length} entrée(s) extraite(s)${parsed.dob?' — date de naissance détectée':''}. Les lignes sont affichées ci-dessous.`
+      : `${lines.length} ligne(s) lue(s) par l'IA, mais aucune entrée vaccinale reconnue. Vérifiez le PDF ou ajoutez les lignes manuellement.`;
     renderVaccineRows();
-    document.getElementById('carnetDetails').open = false;
+    if(carnetDetails) carnetDetails.open = true;
+    document.getElementById('vaccineRows')?.scrollIntoView({behavior:'smooth', block:'nearest'});
     recompute();
   }catch(err){
     console.error(err); status.textContent = 'Erreur de lecture : '+err.message;
