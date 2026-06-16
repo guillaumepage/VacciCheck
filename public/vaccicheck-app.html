@@ -225,6 +225,10 @@ details[open] .carnet-chevron{transform:rotate(180deg)}
               <label for="pdfFile">Importer un PDF (Carnet de santé Québec)</label>
               <input type="file" id="pdfFile" accept="application/pdf"/>
               <div class="hint" id="pdfStatus">Aucune donnée personnelle n'est envoyée à l'extérieur du navigateur.</div>
+              <details id="aiLinesDetails" style="display:none;margin-top:.5rem">
+                <summary class="hint" style="cursor:pointer">Texte lu par l'IA</summary>
+                <pre id="aiRawLines" style="white-space:pre-wrap;max-height:12rem;overflow:auto;margin-top:.35rem;padding:.55rem;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:.78rem;line-height:1.35"></pre>
+              </details>
             </div>
             <div id="vaccineRows"></div>
             <button type="button" id="btnAddVacc" class="small-btn primary" style="margin-top:.6rem">+ Ajouter une entrée</button>
