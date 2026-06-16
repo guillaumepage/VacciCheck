@@ -1158,6 +1158,10 @@ async function handlePdfImport(file){
   try{
     const lines = await extractPdfLines(file);
     console.log('[VacciCheck] lignes IA reçues', lines);
+    const aiDetails = document.getElementById('aiLinesDetails');
+    const aiRaw = document.getElementById('aiRawLines');
+    if(aiRaw) aiRaw.textContent = lines.length ? lines.join('\n') : '(aucune ligne retournée)';
+    if(aiDetails) aiDetails.style.display = 'block';
     const parsed = parseQuebecCarnet(lines);
     if(parsed.fullName){
       patientName.value = toInitials(parsed.fullName);
