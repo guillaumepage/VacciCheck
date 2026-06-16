@@ -2728,7 +2728,13 @@ function bindEvents(){
     if(a!=null) ageYears.value = a;
   });
 
-  document.getElementById('pdfFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) handlePdfImport(f); });
+  document.getElementById('pdfFile').addEventListener('change', async e=>{
+    const input = e.target;
+    const f = input.files && input.files[0];
+    if(!f){ return; }
+    try{ await handlePdfImport(f); }
+    finally{ input.value = ''; } // permet de re-sélectionner le même fichier
+  });
   document.getElementById('btnAddVacc').addEventListener('click', ()=>{ state.vaccineEntries.push(emptyEntry()); renderVaccineRows(); });
   document.getElementById('btnPrint').addEventListener('click', ()=>window.print());
   document.getElementById('btnReset').addEventListener('click', ()=>{
