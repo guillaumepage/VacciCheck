@@ -751,15 +751,17 @@ function requestAiExtract(filename, images){
   return new Promise((resolve, reject)=>{
     if(window.parent === window) return reject(new Error("Hors application : impossible d'appeler l'IA."));
     const id = 'vc_' + Math.random().toString(36).slice(2);
+    console.log('[VacciCheck] postMessage vc:extract', {id, filename, pages: images.length});
     const timeout = setTimeout(()=>{
       window.removeEventListener('message', onMsg);
-      reject(new Error("Pas de réponse de l'IA (timeout)."));
+      reject(new Error("Pas de réponse de l'IA (timeout 120s)."));
     }, 120000);
     function onMsg(ev){
       const d = ev.data;
       if(!d || d.type !== 'vc:extract:result' || d.id !== id) return;
       clearTimeout(timeout);
       window.removeEventListener('message', onMsg);
+      console.log('[VacciCheck] reçu vc:extract:result', {ok: d.ok, lines: d.lines && d.lines.length});
       if(d.ok) resolve(d.lines);
       else reject(new Error(d.error || "Erreur d'extraction IA."));
     }
@@ -770,27 +772,32 @@ function requestAiExtract(filename, images){
 
 async function renderPdfToImages(file, onProgress){
   if(!window.pdfjsLib) throw new Error("PDF.js non chargé");
+  console.log('[VacciCheck] renderPdfToImages start', {name: file.name, size: file.size});
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  console.log('[VacciCheck] PDF ouvert, pages =', pdf.numPages);
   const images = [];
   for(let p=1; p<=pdf.numPages; p++){
     if(onProgress) onProgress(p, pdf.numPages);
+    await new Promise(r=>setTimeout(r, 0));
     const page = await pdf.getPage(p);
     const vp = page.getViewport({scale: 2});
     const canvas = document.createElement('canvas');
     canvas.width = vp.width; canvas.height = vp.height;
     await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
     images.push(canvas.toDataURL('image/jpeg', 0.85));
+    console.log(`[VacciCheck] page ${p}/${pdf.numPages} rendue (${Math.round(images[p-1].length/1024)} KB)`);
   }
   return images;
 }
 
 async function extractPdfLines(file){
   const status = document.getElementById('pdfStatus');
+  if(status) status.textContent = 'Rendu PDF…';
   const images = await renderPdfToImages(file, (p,n)=>{
     if(status) status.textContent = `Rendu PDF… page ${p}/${n}`;
   });
-  if(status) status.textContent = `Analyse IA des ${images.length} page(s)… (cela peut prendre 10–30 s)`;
+  if(status) status.textContent = `Analyse IA des ${images.length} page(s)… (10–30 s)`;
   return await requestAiExtract(file.name || 'carnet.pdf', images);
 }
 
