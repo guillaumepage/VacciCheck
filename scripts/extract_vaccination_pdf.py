@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Extraction JSON d'un carnet de vaccination PDF avec pdfplumber.
+Extraction JSON d'un carnet de vaccination PDF (format SI-PMI/Carnet Québec)
+en utilisant pdfplumber.
 
 Installation :
   python -m pip install pdfplumber
@@ -30,7 +31,7 @@ except ImportError:  # pragma: no cover
     raise SystemExit(2)
 
 
-EXPECTED_COLUMNS = [
+COLUMN_KEYS = [
     "vaccin_administre_nom_commercial",
     "protege_contre_maladies",
     "date_age_administration",
@@ -39,198 +40,210 @@ EXPECTED_COLUMNS = [
 ]
 
 HEADER_KEYWORDS = {
-    "vaccin_administre_nom_commercial": ["vaccin administre", "nom commercial"],
+    "vaccin_administre_nom_commercial": ["vaccin", "administre"],
     "protege_contre_maladies": ["protege", "maladies"],
-    "date_age_administration": ["date", "age", "administration"],
-    "quantite_voie_administration": ["quantite", "voie", "administration"],
-    "professionnel_lieu_administration": ["professionnel", "lieu", "administration"],
+    "date_age_administration": ["date", "age"],
+    "quantite_voie_administration": ["quantite", "voie"],
+    "professionnel_lieu_administration": ["professionnel", "lieu"],
 }
+
+DATE_RE = re.compile(r"\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b")
+FOOTER_RE = re.compile(r"^\s*Date\s*:\s*\d{4}", re.IGNORECASE)
+PAGE_FOOTER_RE = re.compile(r"Page\s*\d+\s*de\s*\d+", re.IGNORECASE)
+
+
+def normalize(text: str) -> str:
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
 def clean_cell(value: Any) -> str:
-    """Nettoie une cellule extraite par pdfplumber."""
     if value is None:
         return ""
     text = str(value).replace("\x00", " ").replace("\r", "\n")
     text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{2,}", "\n", text)
     return text.strip()
-
-
-def normalize(text: str) -> str:
-    """Normalise pour comparer les en-têtes malgré les accents / sauts de ligne."""
-    text = unicodedata.normalize("NFKD", text)
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    text = text.lower().replace("’", "'")
-    return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def is_header_row(row: list[str]) -> bool:
     joined = normalize(" ".join(row))
-    matches = 0
-    for keywords in HEADER_KEYWORDS.values():
-        if all(keyword in joined for keyword in keywords):
-            matches += 1
-    return matches >= 2
+    hits = 0
+    for kws in HEADER_KEYWORDS.values():
+        if all(k in joined for k in kws):
+            hits += 1
+    return hits >= 2
 
 
-def looks_like_continuation(row: list[str]) -> bool:
-    non_empty = [cell for cell in row if cell]
-    return len(non_empty) == 1
-
-
-def row_to_entry(row: list[str], page_number: int) -> dict[str, Any] | None:
-    cells = (row + [""] * 5)[:5]
-    if not any(cells):
-        return None
-    if is_header_row(cells):
-        return None
-
-    return {
-        "page": page_number,
-        "vaccin_administre_nom_commercial": cells[0],
-        "protege_contre_maladies": cells[1],
-        "date_age_administration": cells[2],
-        "quantite_voie_administration": cells[3],
-        "professionnel_lieu_administration": cells[4],
-    }
-
-
-def merge_continuation(previous: dict[str, Any], row: list[str]) -> None:
-    """Ajoute une ligne de continuation à l'entrée précédente."""
-    for key, value in zip(EXPECTED_COLUMNS, row):
-        if not value:
-            continue
-        previous[key] = f"{previous[key]}\n{value}".strip() if previous[key] else value
+def is_footer_row(row: list[str]) -> bool:
+    joined = " ".join(row).strip()
+    return bool(FOOTER_RE.search(joined) or PAGE_FOOTER_RE.search(joined))
 
 
 def extract_patient_info(full_text: str) -> dict[str, str | None]:
-    text = re.sub(r"[ \t]+", " ", full_text)
-
-    name_patterns = [
-        r"\bNom\s*[:\-]?\s*([^\n]+)",
-        r"\bNom de famille et prénom\s*[:\-]?\s*([^\n]+)",
-        r"\bPatient\s*[:\-]?\s*([^\n]+)",
-    ]
-    dob_patterns = [
-        r"\bDate de naissance\s*[:\-]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})",
-        r"\bNaissance\s*[:\-]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})",
-        r"\bDDN\s*[:\-]?\s*([0-9]{4}[-/][0-9]{1,2}[-/][0-9]{1,2}|[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})",
-    ]
+    text = re.sub(r"[ \t]+", " ", full_text or "")
 
     nom = None
-    for pattern in name_patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            candidate = clean_cell(match.group(1))
-            candidate = re.split(r"\s{2,}| Date de naissance\b| Naissance\b| DDN\b", candidate, maxsplit=1, flags=re.IGNORECASE)[0]
-            nom = candidate.strip(" :-") or None
-            break
+    m = re.search(r"\bNom\s*[:\-]?\s*([^\n]+)", text, flags=re.IGNORECASE)
+    if m:
+        candidate = clean_cell(m.group(1))
+        candidate = re.split(
+            r"\s*(?:Date de naissance|Naissance|DDN|NAM|Sexe)\b",
+            candidate,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        nom = candidate.strip(" :-") or None
 
     date_naissance = None
-    for pattern in dob_patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match:
-            date_naissance = clean_cell(match.group(1)).strip(" :-") or None
+    dob_patterns = [
+        r"\b(?:Date de naissance|Naissance|DDN)\s*[:\-]?\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+    ]
+    for pat in dob_patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            date_naissance = m.group(1).strip()
             break
 
     return {"nom": nom, "date_naissance": date_naissance}
 
 
-def extract_vaccines_from_tables(pdf: Any) -> list[dict[str, Any]]:
-    vaccines: list[dict[str, Any]] = []
+def find_header_table(page: Any) -> Any | None:
+    """Trouve la table d'en-tête (5 colonnes 'Vaccin/Protège/Date/Quantité/Professionnel')."""
+    for t in page.find_tables():
+        rows = t.rows
+        if not rows:
+            continue
+        first = rows[0]
+        if len(first.cells) != 5:
+            continue
+        # Vérifie en lisant le texte de la première ligne
+        cells_text = []
+        for c in first.cells:
+            if c is None:
+                cells_text.append("")
+                continue
+            crop = page.crop(c)
+            cells_text.append(crop.extract_text() or "")
+        if is_header_row(cells_text):
+            return t
+    return None
 
-    table_settings = {
-        "vertical_strategy": "lines",
-        "horizontal_strategy": "lines",
+
+def extract_page_rows(page: Any) -> list[list[str]]:
+    """Retourne les lignes brutes d'une page sous forme de 5-colonnes."""
+    header = find_header_table(page)
+    if header is None:
+        return []
+
+    cells = header.rows[0].cells
+    verticals = [cells[0][0]] + [c[2] for c in cells]
+    top = header.bbox[3]
+    bottom = page.height - 10
+    if bottom <= top:
+        return []
+
+    crop = page.crop((header.bbox[0], top, header.bbox[2], bottom))
+    settings = {
+        "vertical_strategy": "explicit",
+        "explicit_vertical_lines": verticals,
+        "horizontal_strategy": "text",
         "snap_tolerance": 3,
-        "join_tolerance": 3,
-        "intersection_tolerance": 5,
-        "text_x_tolerance": 2,
-        "text_y_tolerance": 3,
+        "text_y_tolerance": 2,
+        "intersection_y_tolerance": 6,
     }
+    tables = crop.extract_tables(settings) or []
+    out: list[list[str]] = []
+    for t in tables:
+        for raw in t:
+            row = [clean_cell(c) for c in (raw + [""] * 5)[:5]]
+            out.append(row)
+    return out
 
-    for page_index, page in enumerate(pdf.pages, start=1):
-        tables = page.extract_tables(table_settings) or []
 
-        for table in tables:
-            for raw_row in table:
-                row = [clean_cell(cell) for cell in raw_row]
-                if not any(row):
+def group_entries(rows: list[tuple[int, list[str]]]) -> list[dict[str, Any]]:
+    """Groupe les lignes en entrées-vaccin. Une nouvelle entrée commence
+    quand on trouve une date YYYY/MM/DD dans la colonne 3 (date_age)."""
+    entries: list[dict[str, Any]] = []
+    buffer: list[tuple[int, list[str]]] = []
+
+    def flush() -> None:
+        if not buffer:
+            return
+        page_num = buffer[0][0]
+        cols = ["", "", "", "", ""]
+        for _, row in buffer:
+            for i, val in enumerate(row):
+                if not val:
                     continue
-
-                if len(row) != 5 and len(row) > 5:
-                    row = row[:4] + ["\n".join(row[4:])]
-
-                row = (row + [""] * 5)[:5]
-
-                if is_header_row(row):
-                    continue
-
-                if vaccines and looks_like_continuation(row):
-                    merge_continuation(vaccines[-1], row)
-                    continue
-
-                entry = row_to_entry(row, page_index)
-                if entry:
-                    vaccines.append(entry)
-
-    return vaccines
-
-
-def extract_vaccines_from_text_pages(raw_pages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Secours si le PDF n'a pas de vraies lignes de tableau.
-    Cette méthode garde les lignes détectées sans tenter d'inventer les colonnes.
-    """
-    vaccines: list[dict[str, Any]] = []
-    date_pattern = re.compile(r"\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b")
-
-    for page in raw_pages:
-        for line in page["text"].splitlines():
-            line = clean_cell(line)
-            if not line or is_header_row([line]):
-                continue
-            if not date_pattern.search(line):
-                continue
-            vaccines.append(
+                cols[i] = f"{cols[i]}\n{val}".strip() if cols[i] else val
+        if any(cols):
+            entries.append(
                 {
-                    "page": page["page"],
-                    "vaccin_administre_nom_commercial": line,
-                    "protege_contre_maladies": "",
-                    "date_age_administration": "",
-                    "quantite_voie_administration": "",
-                    "professionnel_lieu_administration": "",
-                    "parse_note": "fallback_text_line",
+                    "page": page_num,
+                    "vaccin_administre_nom_commercial": cols[0],
+                    "protege_contre_maladies": cols[1],
+                    "date_age_administration": cols[2],
+                    "quantite_voie_administration": cols[3],
+                    "professionnel_lieu_administration": cols[4],
                 }
             )
+        buffer.clear()
 
-    return vaccines
+    blank_streak = 0
+    has_date_in_buffer = False
+    for page_num, row in rows:
+        if is_header_row(row) or is_footer_row(row):
+            continue
+        non_empty = any(row)
+        row_has_date = bool(DATE_RE.search(row[2] or ""))
+
+        if not non_empty:
+            blank_streak += 1
+            # 2 lignes vides => fin d'entrée
+            if blank_streak >= 2 and has_date_in_buffer:
+                flush()
+                has_date_in_buffer = False
+                blank_streak = 0
+            continue
+
+        blank_streak = 0
+
+        if row_has_date and has_date_in_buffer:
+            # nouvelle entrée
+            flush()
+            has_date_in_buffer = False
+
+        buffer.append((page_num, row))
+        if row_has_date:
+            has_date_in_buffer = True
+
+    flush()
+    return entries
 
 
 def extract_pdf(pdf_path: Path, include_raw: bool = False) -> dict[str, Any]:
     with pdfplumber.open(pdf_path) as pdf:
         raw_pages = []
-        for page_index, page in enumerate(pdf.pages, start=1):
-            raw_pages.append(
-                {
-                    "page": page_index,
-                    "text": page.extract_text(x_tolerance=1, y_tolerance=3) or "",
-                }
-            )
+        all_rows: list[tuple[int, list[str]]] = []
 
-        full_text = "\n".join(page["text"] for page in raw_pages)
+        for idx, page in enumerate(pdf.pages, start=1):
+            text = page.extract_text(x_tolerance=1, y_tolerance=3) or ""
+            raw_pages.append({"page": idx, "text": text})
+            for row in extract_page_rows(page):
+                all_rows.append((idx, row))
+
+        full_text = "\n".join(p["text"] for p in raw_pages)
         patient = extract_patient_info(full_text)
-        vaccines = extract_vaccines_from_tables(pdf)
+        vaccines = group_entries(all_rows)
 
         warnings: list[str] = []
         if not vaccines:
-            warnings.append("Aucun tableau exploitable détecté; extraction de secours par lignes de texte utilisée.")
-            vaccines = extract_vaccines_from_text_pages(raw_pages)
+            warnings.append("Aucune entrée vaccin détectée.")
         if not patient["nom"]:
-            warnings.append("Nom du patient non détecté automatiquement.")
+            warnings.append("Nom du patient non détecté.")
         if not patient["date_naissance"]:
-            warnings.append("Date de naissance non détectée automatiquement.")
+            warnings.append("Date de naissance non détectée.")
 
         result: dict[str, Any] = {
             "source_file": pdf_path.name,
@@ -243,6 +256,7 @@ def extract_pdf(pdf_path: Path, include_raw: bool = False) -> dict[str, Any]:
 
         if include_raw:
             result["raw_pages"] = raw_pages
+            result["raw_rows"] = [{"page": p, "row": r} for p, r in all_rows]
 
         return result
 
@@ -250,8 +264,8 @@ def extract_pdf(pdf_path: Path, include_raw: bool = False) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Extrait un carnet de vaccination PDF en JSON.")
     parser.add_argument("pdf", type=Path, help="Chemin du PDF à analyser")
-    parser.add_argument("--pretty", action="store_true", help="Formate le JSON avec indentation")
-    parser.add_argument("--include-raw", action="store_true", help="Inclut le texte brut par page dans le JSON")
+    parser.add_argument("--pretty", action="store_true", help="Formate le JSON")
+    parser.add_argument("--include-raw", action="store_true", help="Inclut texte/rows bruts")
     args = parser.parse_args()
 
     if not args.pdf.exists():
