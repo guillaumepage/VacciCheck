@@ -99,10 +99,12 @@ details summary::-webkit-details-marker{display:none}
 .carnet-chevron{transition:transform .2s;display:inline-block}
 details[open] .carnet-chevron{transform:rotate(180deg)}
 /* Vaccine rows */
-.vacc-table{width:100%;border-collapse:separate;border-spacing:0 .35rem;font-size:var(--text-sm)}
+.vacc-table{width:100%;border-collapse:separate;border-spacing:0 .35rem;font-size:var(--text-sm);table-layout:auto}
 .vacc-table th{background:var(--color-primary);color:#fff;padding:.5rem;font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.04em;text-align:left}
 .vacc-table td{background:var(--color-surface-2);padding:.45rem .55rem;vertical-align:middle;border-top:1px solid var(--color-border);border-bottom:1px solid var(--color-border)}
 .vacc-table td input,.vacc-table td select{padding:.35rem .5rem;border-radius:6px;font-size:var(--text-xs)}
+.vacc-table th:first-child,.vacc-table td:first-child{min-width:240px;width:240px}
+.vacc-table td:first-child select{width:100%;min-width:220px;white-space:normal;text-overflow:clip}
 .vacc-table td:first-child{border-left:1px solid var(--color-border);border-radius:6px 0 0 6px}
 .vacc-table td:last-child{border-right:1px solid var(--color-border);border-radius:0 6px 6px 0}
 .small-btn{padding:.3rem .55rem;font-size:var(--text-xs);border-radius:8px;border:1px solid var(--color-border);background:transparent;cursor:pointer;color:var(--color-text)}
@@ -1196,6 +1198,20 @@ function isDoseCountFor(antigen){
     return false;
   }).length;
 }
+// Compte fractionnaire — Twinrix adulte (1 mL) = 1 dose HB mais 0,5 dose HA (720 U).
+// Twinrix Junior (0,5 mL) = 1 dose HA pédiatrique mais 0,5 dose HB.
+function effectiveDoseCount(targetAntigen){
+  let n = 0;
+  state.vaccineEntries.forEach(e=>{
+    if(e.antigen===targetAntigen){ n += 1; return; }
+    if(e.antigen==='Hépatite A+B'){
+      const isJunior = !!e.halfDose; // 0,5 mL Twinrix Junior
+      if(targetAntigen==='Hépatite A') n += isJunior ? 1 : 0.5;
+      else if(targetAntigen==='Hépatite B') n += isJunior ? 0.5 : 1;
+    }
+  });
+  return n;
+}
 
 function clinicalRiskGroups(){
   return {
@@ -1498,37 +1514,52 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
 
   // ---- Hépatite A
   if(disease==='Hépatite A'){
-    const doses=isDoseCountFor('Hépatite A');
     const haStats = vaccineStats(['Hépatite A','Hépatite A+B']);
-    // Règle pédiatrique : 1-19 ans + ≥ 1 dose de HA (0,5 mL ou 1 mL) = complet
-    // SAUF si immunodéprimé / VIH / maladie chronique hépatique ou rénale
+    const haEff = effectiveDoseCount('Hépatite A');
+    const nbTwinrix = state.vaccineEntries.filter(e=>e.antigen==='Hépatite A+B').length;
+    const allTwinrix = nbTwinrix>0 && nbTwinrix===haStats.count;
+    // Règle pédiatrique : 1-19 ans + ≥ 1 dose HA effective = complet (SAUF immuno / VIH / hépato / rénale)
     const youngHealthyHA = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.hepatique || rg.renale);
-    if(youngHealthyHA && haStats.count>=1){
-      return {status:'Complet', msg:'1-19 ans, ≥ 1 dose de Hépatite A reçue (0,5 mL ou 1 mL) — vaccination considérée <strong>complète</strong> chez l\'enfant ou adolescent en santé. <em>Exception :</em> si jeune immunodéprimé, infecté par le VIH, ou atteint d\'une maladie chronique hépatique ou rénale → administrer une 2<sup>e</sup> dose (intervalle minimal de 5 mois entre les doses). '+inspqText, urgent:false};
+    if(youngHealthyHA && haEff>=1){
+      return {status:'Complet', msg:"1-19 ans, ≥ 1 dose de Hépatite A reçue (0,5 mL ou 1 mL) — vaccination considérée complète chez l'enfant ou adolescent en santé. Exception : si jeune immunodéprimé, infecté par le VIH, ou atteint d'une maladie chronique hépatique ou rénale → administrer une 2e dose (intervalle minimal de 5 mois entre les doses). "+inspqText, urgent:false};
     }
-    if(doses>=2){ status='Complet'; msg='Série complète déjà reçue (≥2 doses). Aucune dose supplémentaire requise.'; }
-    else if(doses===1){ status='À considérer'; msg='1 dose au dossier. 2e dose recommandée ≥6 mois après la 1re. Contexte pays : '+inspqText; }
-    else if(rg.hepatique||rg.doute){ status='Recommandé'; msg='Recommandé d\'office (maladie hépatique ou statut incertain). '+inspqText; }
+    const isTous = (inspqClass==='tous'||inspqClass==='requis');
+    if(haEff>=2){ status='Complet'; msg='Série complète déjà reçue (≥ 2 doses équivalentes). Aucune dose supplémentaire requise.'; }
+    else if(haEff>0){
+      const twNote = allTwinrix ? `Note : les doses de Twinrix adulte (1 mL) ne contiennent que 720 U d'antigène HA (½ dose adulte). Il manque 1 dose HA junior (0,5 mL) ou 1 Twinrix adulte pour compléter la série Hépatite A. ` : '';
+      status = isTous ? 'Recommandé' : 'À considérer';
+      msg=`${haEff} dose(s) équivalente(s) au dossier. ${twNote}2e dose recommandée ≥ 6 mois après la 1re. Contexte pays : `+inspqText;
+    }
+    else if(rg.hepatique||rg.doute){ status='Recommandé'; msg="Recommandé d'office (maladie hépatique ou statut incertain). "+inspqText; }
+    else if(isTous){ status='Recommandé'; msg='Recommandé pour tous selon le contexte pays. '+inspqText; }
     return {status, msg, urgent};
   }
   // ---- Hépatite B
   if(disease==='Hépatite B'){
-    const doses=isDoseCountFor('Hépatite B');
     const hbStats = vaccineStats(['Hépatite B','Hépatite A+B']);
+    const hbEff = effectiveDoseCount('Hépatite B');
+    const nbTwinrixB = state.vaccineEntries.filter(e=>e.antigen==='Hépatite A+B').length;
+    const allTwinrixB = nbTwinrixB>0 && nbTwinrixB===hbStats.count;
     // Règle pédiatrique : 1-19 ans + ≥ 2 doses de HB (0,5 mL) = complet
     const youngHealthyHB = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.renale);
-    if(youngHealthyHB && hbStats.count>=2){
-      return {status:'Complet', msg:'1-19 ans, ≥ 2 doses de Hépatite B (0,5 mL pédiatrique) — vaccination considérée <strong>complète</strong> chez l\'enfant ou adolescent en santé. '+inspqText, urgent:false};
+    if(youngHealthyHB && hbEff>=2){
+      return {status:'Complet', msg:'1-19 ans, ≥ 2 doses équivalentes de Hépatite B — vaccination considérée complète chez l\'enfant ou adolescent en santé. '+inspqText, urgent:false};
     }
     const hepbCat=(document.getElementById('q_hepb_categorie')||{}).value || '';
     const isImmunoCtx = rg.immuno || rg.renale || hepbCat==='immuno' || hepbCat==='dialyse' || hepbCat==='greffe';
-    if(doses>=3 && isImmunoCtx){
+    const isTousB = (inspqClass==='tous'||inspqClass==='requis');
+    if(hbEff>=3 && isImmunoCtx){
       status='À considérer';
-      msg='≥3 doses standard au dossier, mais statut immunosupprimé / IRC / greffe : les doses auraient dû être en double dose (40 µg). Doser anti-HBs (cible ≥10 UI/L) ; doses supplémentaires (double dose) au besoin. '+inspqText;
+      msg='≥ 3 doses standard au dossier, mais statut immunosupprimé / IRC / greffe : les doses auraient dû être en double dose (40 µg). Doser anti-HBs (cible ≥10 UI/L) ; doses supplémentaires (double dose) au besoin. '+inspqText;
     }
-    else if(doses>=3){ status='Complet'; msg='Série complète (≥3 doses) chez l\'immunocompétent. Aucune dose supplémentaire requise.'; }
-    else if(doses>0){ status='À considérer'; msg=`${doses} dose(s) reçue(s). Compléter la série (0-1-6 mois). Contexte pays : `+inspqText; }
+    else if(hbEff>=3){ status='Complet'; msg='Série complète (≥ 3 doses équivalentes) chez l\'immunocompétent. Aucune dose supplémentaire requise.'; }
+    else if(hbEff>0){
+      const twNoteB = allTwinrixB ? `Note : Twinrix Junior (0,5 mL) ne contient que 10 µg d'antigène HB (½ dose adulte) ; le Twinrix adulte (1 mL) compte pour une dose HB complète. ` : '';
+      status = isTousB ? 'Recommandé' : 'À considérer';
+      msg=`${hbEff} dose(s) équivalente(s) au dossier. ${twNoteB}Compléter la série (0-1-6 mois). Contexte pays : `+inspqText;
+    }
     else if(rg.sex||rg.tatouage||rg.sante||rg.renale){ status='Recommandé'; msg='Recommandé d\'office (exposition sang/sexe ou dialyse). '+inspqText; }
+    else if(isTousB){ status='Recommandé'; msg='Recommandé pour tous selon le contexte pays. '+inspqText; }
     return {status, msg, urgent};
   }
   // ---- Fièvre jaune
@@ -1647,6 +1678,19 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
   }
   // ---- Méningocoque
   if(d.includes('méningocoque')||d.includes('méningite')){
+    // Check vaccin Men-C-ACYW (Menveo / Nimenrix / Menactra) au dossier
+    const lastMACYW = state.vaccineEntries
+      .filter(e=>/men-?c-?acyw|menveo|nimenrix|menactra|\bacyw\b/i.test(`${e.antigen||''} ${e.product||''}`))
+      .map(e=>parseDate(e.date)).filter(Boolean).sort((a,b)=>b-a)[0];
+    if(lastMACYW){
+      const yrs = (Date.now()-lastMACYW.getTime())/(365.25*24*3600*1000);
+      const boosterY = (age!=null && age<7) ? 3 : 5;
+      if(yrs < boosterY){
+        return {status:'Complet',
+          msg:`Men-C-ACYW-135 reçu il y a ${yrs.toFixed(1)} an(s) — protection en cours (rappel q ${boosterY} ans si l'exposition persiste). `+inspqText,
+          urgent:false, considerGroups: PARTICULAR_GROUPS_HTML['Méningocoque']};
+      }
+    }
     const pgM = particularGroupsMatch('Méningocoque', rg, age, inspqText, '');
     if(pgM.match){
       return {status:'Recommandé', msg:`Recommandé — ${pgM.motifs.join(' ; ')}. `+inspqText, urgent,
@@ -1665,6 +1709,11 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     const sinceP = sP.yearsSinceLast;
     if(age!=null && age<18 && sP.count<4){
       return {status:'Recommandé', msg:'Primo-immunisation pour mineurs. '+inspqText, urgent:false};
+    }
+    // Mineurs avec primovaccination complète : aucun rappel adulte requis
+    // (le rappel polio voyage est recommandé uniquement ≥ 18 ans)
+    if(age!=null && age<18 && sP.count>=3){
+      return {status:'Complet', msg:"Primovaccination complète chez mineur — aucun rappel voyage requis (le rappel polio voyage est recommandé pour les ≥ 18 ans). "+inspqText, urgent:false};
     }
     if(isEliminatedP && sP.count>=3){
       return {status:'Complet', msg:'Primovaccination complète et polio éliminée dans ce pays — aucun rappel adulte requis. '+inspqText, urgent:false};
@@ -1759,36 +1808,38 @@ const DECISION_TREES = {
     }catch(e){}
 
     // #233 — doses au dossier (la 1re dose <1 an ne compte pas → #236)
-    let effectiveCount = s.count;
+    // Comptage fractionnaire : Twinrix adulte = 0,5 dose HA ; Twinrix Junior = 1 dose HA pédiatrique.
+    let effectiveCount = effectiveDoseCount('Hépatite A');
     if(s.ageAtFirst!=null && s.ageAtFirst<1 && effectiveCount>0) effectiveCount -= 1;
 
     const wasHalf = s.halfDoses>0 && s.fullDoses===0;
+    const nbTwinrixHA = state.vaccineEntries.filter(e=>e.antigen==='Hépatite A+B').length;
+    const allTwinrixHA = nbTwinrixHA>0 && nbTwinrixHA===s.count;
     if(effectiveCount>=2){
-      let txt = `<strong>Complet :</strong> 2 doses valides au dossier. Protection à vie chez l'immunocompétent — aucun rappel.`;
+      let txt = `<strong>Complet :</strong> 2 doses équivalentes au dossier. Protection à vie chez l'immunocompétent — aucun rappel.`;
       if(wasHalf && age!=null && age>=18){
-        txt += ` <br><em>NB :</em> les 2 doses étaient pédiatriques (0,5 mL) et le patient est désormais adulte — considérer une dose adulte (1 mL) de rappel selon le contexte d'exposition.`;
+        txt += ` <br><em>NB :</em> les 2 doses étaient pédiatriques (0,5 mL) et le patient est désormais adulte — considérer une dose adulte de rappel selon le contexte d'exposition.`;
       }
-      if(immuno) txt += ` <br><strong>⚠ Immunosupprimé :</strong> les 2 doses doivent être des doses <strong>complètes (1 mL)</strong>; si l'une était pédiatrique, envisager une dose supplémentaire adulte.`;
+      if(immuno) txt += ` <br><strong>⚠ Immunosupprimé :</strong> chez l'adulte, les 2 doses doivent être complètes (1 mL Havrix/Vaqta ou 0,5 mL [160 U] Avaxim) ; chez l'enfant immunodéprimé, 2 doses pédiatriques (0,5 mL) sont acceptables (intervalle minimal 5 mois).`;
       return txt;
     }
-    if(effectiveCount===1){
+    if(effectiveCount>0 && effectiveCount<2){
       const since = s.yearsSinceLast;
       let doseLbl;
-      if(immuno){
-        doseLbl = 'dose <strong>complète adulte (1 mL — Havrix 1440 / Avaxim / Vaqta)</strong>, même si la 1re dose était pédiatrique : l\'immunosuppression justifie la dose adulte';
+      if(immuno && age!=null && age<20){
+        doseLbl = "<strong>demi-dose pédiatrique (0,5 mL — Havrix Junior / Avaxim Pédiatrique / Vaqta 0,5 mL)</strong> ; intervalle minimal 5 mois. Si la 2e dose est administrée à l'âge de 20 ans ou plus, utiliser la dose adulte (1 mL Havrix/Vaqta ou 0,5 mL [160 U] Avaxim)";
+      } else if(immuno){
+        doseLbl = "<strong>même posologie que la 1re dose adulte</strong> (1 mL Havrix/Vaqta ou 0,5 mL [160 U] Avaxim) : chez l'immunodéprimé, le VIH, ou l'atteinte hépatique/rénale chronique, la 2e dose reste à dose complète";
       } else if(age!=null && age<18){
-        doseLbl = wasHalf
-          ? 'demi-dose pédiatrique (0,5 mL — Havrix Junior / Avaxim Pédiatrique), pour s\'aligner sur la 1re dose'
-          : 'dose pédiatrique (0,5 mL si <18 ans, sinon 1 mL adulte)';
+        doseLbl = "dose pédiatrique 0,5 mL (Havrix Junior / Avaxim Pédiatrique / Vaqta 0,5 mL)";
       } else {
-        doseLbl = wasHalf
-          ? '<strong>dose complète adulte (1 mL)</strong> — patient désormais ≥ 18 ans ; ne pas refaire de demi-dose'
-          : '<strong>demi-dose / dose junior (0,5 mL — Havrix Junior / Avaxim Pédiatrique)</strong> acceptable pour la 2e dose chez l\'adulte immunocompétent ayant déjà reçu 1 dose complète ; une dose adulte complète (1 mL) reste également acceptable';
+        // Adulte immunocompétent
+        doseLbl = "<strong>0,5 mL Havrix ou 0,5 mL Vaqta ou 0,5 mL (80 U) Avaxim</strong> (2e dose adulte = demi-dose ; si la séquence est inversée — 1re demi-dose puis 2e dose complète — aucune dose additionnelle n'est requise)";
       }
+      const twNote = allTwinrixHA ? ` <br><em>Twinrix adulte (1 mL) = ½ dose HA (720 U) :</em> il manque 1 dose de Hépatite A junior (0,5 mL) ou 1 Twinrix adulte additionnel pour compléter la série Hépatite A.` : '';
       let txt = (since!=null && since<6/12)
-        ? `<strong>1 dose reçue il y a ${since.toFixed(1)} an.</strong> Administrer la 2e dose ≥ 6 mois après la 1re — ${doseLbl}.`
-        : `<strong>1 dose reçue.</strong> Administrer la 2e dose maintenant (intervalle ≥ 6 mois respecté) — ${doseLbl}. Protection durable après 2 doses.`;
-      if(immuno) txt += ` <br><strong>⚠ Immunosupprimé :</strong> administrer la 2e dose en <strong>dose complète adulte (1 mL)</strong>.`;
+        ? `<strong>${effectiveCount} dose(s) équivalente(s) reçue(s), la plus récente il y a ${since.toFixed(1)} an.</strong> Administrer la prochaine dose ≥ 6 mois après (intervalle minimal 5 mois) — ${doseLbl}.${twNote}`
+        : `<strong>${effectiveCount} dose(s) équivalente(s) au dossier.</strong> Administrer la prochaine dose maintenant (intervalle ≥ 6 mois respecté) — ${doseLbl}. Protection durable après 2 doses.${twNote}`;
       if(hepato) txt += ` <br><strong>Hépatopathie chronique :</strong> vaccination prioritaire ; envisager sérologie post-vaccinale.`;
       return txt;
     }
@@ -1796,16 +1847,24 @@ const DECISION_TREES = {
     if(age!=null && age<1) return `<strong>&lt; 1 an :</strong> vaccin non recommandé en routine ; immunoglobulines (Ig 0,02 mL/kg IM, max 2 mL) si voyage en zone endémique avec départ &lt; 2 semaines.`;
     let txt;
     if(age!=null && age<18){
-      txt = `<strong>Schéma pédiatrique (1-17 ans) :</strong> 2 doses de <em>Havrix Junior</em> ou <em>Avaxim Pédiatrique</em> (0,5 mL) à 0 et 6-12 mois. Protection ≥ 14 j après la 1re dose.`;
+      txt = `<strong>Schéma pédiatrique (1-17 ans) :</strong> 2 doses de <em>Havrix Junior</em> ou <em>Avaxim Pédiatrique</em> ou <em>Vaqta 0,5 mL</em> (0,5 mL) à 0 et 6-12 mois (intervalle minimal 5 mois). Protection ≥ 14 j après la 1re dose.`;
     } else {
-      txt = `<strong>Schéma adulte :</strong> 2 doses de <em>Havrix 1440 / Avaxim / Vaqta</em> (1 mL) à 0 et 6-12 mois. Si Hépatite B aussi requise : <em>Twinrix</em> (0-1-6 mois) ou schéma accéléré 0-7-21 j + rappel à 12 mois.`;
+      txt = `<strong>Schéma adulte :</strong><br>• <strong>1re dose</strong> : 1 mL Havrix ou 1 mL Vaqta, ou 0,5 mL (160 U) Avaxim.<br>• <strong>2e dose</strong> : 0,5 mL Havrix ou 0,5 mL Vaqta, ou 0,5 mL (80 U) Avaxim.<br>• <strong>Intervalle recommandé</strong> : 6 à 12 mois (minimal 5 mois).<br>• Si la séquence posologique est inversée (1re demi-dose et 2e dose complète), aucune dose additionnelle n'est requise.<br>• <em>Note pré-voyage :</em> la posologie de la 1re dose doit être respectée (dose complète adulte).<br>• Chez les personnes immunodéprimées, infectées par le VIH ou atteintes d'une maladie chronique hépatique ou rénale, la 2e dose se donne à la même posologie que la 1re.<br>• Si Hépatite B aussi requise : <em>Twinrix adulte</em> (0-1-6 mois) ou schéma accéléré 0-7-21 j + rappel à 12 mois (Twinrix adulte = 1 dose HB complète mais ½ dose HA → 2 doses Twinrix adulte = série HB complète mais il manque 1 dose HA pour compléter la série Hépatite A).`;
+    }
+    // #247/#250 — facteurs de risque
+    if(hepato){
+      txt += ` <br><strong>Hépatopathie chronique :</strong> vaccination prioritaire.`;
     }
     // #247/#250 — facteurs de risque
     if(hepato){
       txt += ` <br><strong>Hépatopathie chronique :</strong> vaccination prioritaire.`;
     }
     if(immuno){
-      txt += ` <br><strong>⚠ Immunosupprimé :</strong> schéma 2 doses <strong>complètes adultes (1 mL)</strong> à 0 et 6-12 mois.`;
+      if(age!=null && age<20){
+        txt += ` <br><strong>⚠ Immunosupprimé (1-19 ans) :</strong> 2 doses pédiatriques <em>(0,5 mL — Havrix Junior / Avaxim Pédiatrique / Vaqta 0,5 mL)</em> à 0 et 6-12 mois (intervalle minimal 5 mois). Si la 2e dose est administrée à ≥ 20 ans, utiliser la dose adulte (1 mL Havrix/Vaqta ou 0,5 mL [160 U] Avaxim).`;
+      } else {
+        txt += ` <br><strong>⚠ Immunosupprimé (adulte) :</strong> 2 doses complètes adultes à 0 et 6-12 mois — 1 mL Havrix/Vaqta ou 0,5 mL (160 U) Avaxim. La 2e dose se donne à la même posologie que la 1re.`;
+      }
       if(age!=null && age>=40 && daysToDep!=null && daysToDep<14){
         txt += ` <br><strong>≥ 40 ans + immunosuppression + départ &lt; 14 j :</strong> ajouter <em>Ig IM 0,02 mL/kg</em> (max 2 mL) en plus de la 1re dose, dans un site anatomique différent.`;
       }
@@ -2699,11 +2758,14 @@ function formatInspqHtml(text){
   let html='', inUl=false;
   const openUl=()=>{ if(!inUl){ html+='<ul>'; inUl=true; } };
   const closeUl=()=>{ if(inUl){ html+='</ul>'; inUl=false; } };
+  // Whitelist quelques balises HTML simples (strong, em, sup, sub, b, i, br)
+  // afin qu'elles soient rendues telles quelles plutôt qu'affichées comme texte brut.
+  const escAllow = t => esc(t).replace(/&lt;(\/?)(strong|em|sup|sub|b|i|br)\s*\/?&gt;/gi, '<$1$2>');
   for(const b of blocks){
     if(b.html){ openUl(); html+='<li>'+b.html+'</li>'; }
-    else if(b.type==='li'){ openUl(); html+='<li>'+esc(b.text)+'</li>'; }
-    else if(b.type==='h'){ closeUl(); html+='<p class="sub-heading">'+esc(b.text)+'</p>'; }
-    else { closeUl(); html+='<p>'+esc(b.text)+'</p>'; }
+    else if(b.type==='li'){ openUl(); html+='<li>'+escAllow(b.text)+'</li>'; }
+    else if(b.type==='h'){ closeUl(); html+='<p class="sub-heading">'+escAllow(b.text)+'</p>'; }
+    else { closeUl(); html+='<p>'+escAllow(b.text)+'</p>'; }
   }
   closeUl();
   return html;
