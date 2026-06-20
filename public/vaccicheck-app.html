@@ -2586,6 +2586,7 @@ function renderPrintArea(age){
   {
     const cbItems=[];
     document.querySelectorAll('.cb input[type="checkbox"]').forEach(cb=>{
+      if(cb.closest('#vaccineRows')) return; // exclude vaccine row controls (e.g. demi/junior)
       if(!cb.checked) return;
       const lbl = cb.closest('label'); if(!lbl) return;
       const txt = (lbl.textContent||'').replace(/\s+/g,' ').trim();
