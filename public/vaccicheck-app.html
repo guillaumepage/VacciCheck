@@ -69,7 +69,8 @@ h1,h2,h3,h4,p{margin:0}
 .btn.primary{background:#fff;color:#1E64B8}
 .btn.danger{background:rgba(176,38,76,.85);color:#fff;border-color:rgba(255,255,255,.4)}
 .grid{display:grid;grid-template-columns:minmax(380px,1fr) minmax(380px,1.1fr);grid-template-areas:"carnet form" "results results";gap:var(--space-6)}
-.col-carnet{grid-area:carnet}.col-form{grid-area:form}.col-results{grid-area:results}
+.col-carnet{grid-area:carnet;min-width:0}.col-form{grid-area:form;min-width:0}.col-results{grid-area:results;min-width:0}
+.col-carnet .panel,.col-carnet details,#vaccineRows{min-width:0;max-width:100%;overflow-x:auto}
 @media(max-width:1120px){.grid{grid-template-columns:1fr;grid-template-areas:"carnet" "form" "results"}}
 .stack{display:grid;gap:var(--space-5)}
 .panel{background:var(--color-surface);border:1px solid var(--color-border);border-left:4px solid var(--color-accent-2);border-radius:var(--radius-xl);padding:var(--space-5);box-shadow:var(--shadow-sm)}
