@@ -1555,7 +1555,7 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     else if(haEff>0){
       const twNote = allTwinrix ? `Note : les doses de Twinrix adulte (1 mL) ne contiennent que 720 U d'antigène HA (½ dose adulte). Il manque 1 dose HA junior (0,5 mL) ou 1 Twinrix adulte pour compléter la série Hépatite A. ` : '';
       status = isTous ? 'Recommandé' : 'À considérer';
-      msg=`${haEff} dose(s) équivalente(s) au dossier. ${twNote}2e dose recommandée ≥ 6 mois après la 1re. Contexte pays : `+inspqText;
+      msg=`${String(haEff).replace('.',',')} dose(s) équivalente(s) au dossier. ${twNote}2e dose recommandée ≥ 6 mois après la 1re. Contexte pays : `+inspqText;
     }
     else if(rg.hepatique||rg.doute){ status='Recommandé'; msg="Recommandé d'office (maladie hépatique ou statut incertain). "+inspqText; }
     else if(isTous){ status='Recommandé'; msg='Recommandé pour tous selon le contexte pays. '+inspqText; }
