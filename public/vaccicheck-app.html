@@ -160,7 +160,8 @@ details[open] .carnet-chevron{transform:rotate(180deg)}
 .zika-pregnancy-warning{background:#fee;border:2px solid #c1121f;color:#7d0000;padding:10px;border-radius:8px;margin:8px 0;font-weight:600}
 .zika-pregnancy-warning .zika-title{display:flex;align-items:center;gap:.4rem;font-size:1.05em;margin-bottom:.35rem}
 @media print{
-  @page{size:A4;margin:12mm}
+  @page{size:A4;margin:0}
+  #printArea{padding:12mm}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
   body{background:#fff!important;color:#000!important;font-size:10pt;line-height:1.35}
   .app{display:none!important}
