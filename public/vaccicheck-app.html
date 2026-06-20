@@ -1651,13 +1651,14 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
         considerGroups: PARTICULAR_GROUPS_HTML['Typhoïde']};
     }
     const pgT = particularGroupsMatch('Typhoïde', rg, age, inspqText, '');
-    if(pgT.match){
-      return {status:'Recommandé', msg:`Recommandé — groupe particulier identifié au questionnaire clinique : ${pgT.motifs.join(', ')}. `+inspqText, urgent,
-        considerGroups: PARTICULAR_GROUPS_HTML['Typhoïde'], matchedKeywords: matchedKeywordsForDisease('Typhoïde', rg, age, pgT.motifs)};
-    }
+    const indivMention = ' <br><em>Une estimation individualisée du risque doit être faite par l\'intervenant avec le voyageur après avoir évalué l\'ensemble de ces critères, tout en tenant compte du risque estimatif de base et des préférences du voyageur.</em>';
     if(inspqClass==='tous'||inspqClass==='requis'){
-      return {status:'Recommandé', msg:'Recommandé pour tous. '+inspqText, urgent,
+      return {status:'Recommandé', msg:'Recommandé pour tous — pays où le risque de transmission est considéré élevé. '+inspqText, urgent,
         considerGroups: PARTICULAR_GROUPS_HTML['Typhoïde'], matchedKeywords: ['transmission']};
+    }
+    if(pgT.match){
+      return {status:'À considérer', msg:`Groupe particulier identifié au questionnaire clinique : ${pgT.motifs.join(', ')}. `+inspqText+indivMention, urgent,
+        considerGroups: PARTICULAR_GROUPS_HTML['Typhoïde'], matchedKeywords: matchedKeywordsForDisease('Typhoïde', rg, age, pgT.motifs)};
     }
     return {status:'Non requis', msg:inspqText, urgent, secondaryBadge:'À considérer', considerGroups:PARTICULAR_GROUPS_HTML['Typhoïde']};
   }
