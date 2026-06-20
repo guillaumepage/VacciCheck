@@ -1160,7 +1160,19 @@ function parseQuebecCarnet(struct){
   }
   entries.push(...hbExtras);
 
-
+  // ----- Auto-extract Varicelle from RROVar (compte aussi comme dose RRO via QC_CODE_MAP) -----
+  const RROVAR_RE = /\brro[\s\-]?var\b|priorix.?tetra|proquad/i;
+  const existingVarDates = new Set(entries.filter(e=>e.antigen==='Varicelle').map(e=>e.date));
+  const varExtras = [];
+  for(const r of struct.rawEntries){
+    const combo = `${r.vaccin}\n${r.maladies}\n${r.quantite}`;
+    if(!RROVAR_RE.test(combo)) continue;
+    const iso = parseFlexibleDate(r.rawDate);
+    if(!iso || existingVarDates.has(iso)) continue;
+    existingVarDates.add(iso);
+    varExtras.push({antigen:'Varicelle', product:'RROVar (composante varicelle)', volume:'', halfDose:false, date:iso, ageAt:'', lot:''});
+  }
+  entries.push(...varExtras);
 
   return { fullName, dob, entries };
 }
