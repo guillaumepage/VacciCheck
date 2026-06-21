@@ -1,81 +1,63 @@
-# Intégration de l'extraction PDF par IA dans VacciCheck
+## V40 — Plan d'action
 
-## Objectif
+### 1. Correctifs immédiats (V40 du HTML)
 
-Remplacer l'extraction de texte naïve (`pdfjs.getTextContent`) par une lecture visuelle par IA (Gemini 2.5 Pro), **tout en conservant intégralement** la logique métier québécoise déjà présente dans le HTML (`parseQuebecCarnet`, `COMMERCIAL_MAP`, `QC_CODE_MAP`, dérivation des doses, détection nom/DDN, etc.).
+**Marges d'impression**
+- Remplacer `@page { margin: 0 }` par `@page { margin: 12mm 12mm 12mm 12mm }` dans le bloc `@media print` de `public/vaccicheck-app.html`.
+- Retirer le padding compensatoire ajouté à `#printArea` en V39 (devenait inutile et créait du vide).
+- Conserver la suppression des en-têtes/pieds générés par le navigateur (la marge `@page` reste compatible — l'absence d'en-tête/pied vient des réglages d'impression du navigateur, pas du CSS ; on ajoutera une note explicite à l'utilisateur dans le dialogue d'impression : décocher « En-têtes et pieds de page »).
 
-## Principe
+**Logo officiel partout**
+- Réencoder le logo joint (`generated-image.png`) en base64 à 256×256.
+- Remplacer la balise `<img>` du `.logo` du topbar.
+- Vérifier que `buildPrintHTML` (rapport imprimable) lit bien ce même `<img>` — sinon injecter directement la même data-URL dans le header du rapport pour garantir l'affichage.
 
-L'IA produit le **même format de sortie que `extractPdfLines` aujourd'hui** : un tableau de lignes (`string[]`) avec `__PAGE_BREAK__` entre les pages. Tout le reste du moteur de VacciCheck continue de fonctionner sans modification.
+Livrable : `public/vaccicheck-app.html` mis à jour + copie `public/test_v40.html` téléchargeable.
 
-```
-PDF → pdf.js rendu canvas (iframe) → images base64
-    → postMessage(parent) → serverFn → Gemini Vision
-    → string[] (lignes propres) → postMessage(iframe)
-    → parseQuebecCarnet(lines)   [code existant, inchangé]
-    → state.vaccineEntries       [code existant, inchangé]
-```
+---
 
-## Pourquoi cette approche
+### 2. Données INSPQ toujours à jour
 
-- **Préserve 1500 lignes de logique québécoise** déjà éprouvée (mapping antigènes, demi-doses, polio extraits, etc.).
-- **Iframe inchangé visuellement** — tu retrouves ton site exact.
-- **Seul `extractPdfLines` est remplacé** : c'est lui qui causait les entrées manquantes dans les tableaux denses.
+**Réponse courte : non, pas automatiquement, mais on a deux options.**
 
-## Architecture technique
+L'INSPQ ne publie pas d'API publique pour `sante-voyage/guide/pays`. Les options possibles :
 
-### 1. Côté iframe (`public/vaccicheck-app.html`)
+**Option A — Statu quo (recommandé pour l'instant)**
+- Les recommandations par pays restent figées dans le HTML, mises à jour manuellement quand l'INSPQ change ses fiches.
+- Avantage : zéro coût, zéro dépendance réseau, fonctionne hors-ligne.
+- Inconvénient : nécessite une révision périodique (ex. trimestrielle).
 
-Modifier deux endroits seulement :
+**Option B — Scraper côté serveur avec cache**
+- Créer un cron (1×/semaine) qui scrape les pages INSPQ par pays, stocke le résultat dans Lovable Cloud, et l'expose à l'app via une server function.
+- Avantage : données fraîches automatiquement.
+- Inconvénients : (1) risque légal/éthique de scraping sans accord INSPQ, (2) leur HTML peut changer et casser le parser, (3) ajoute backend + maintenance.
 
-- **`extractPdfLines(file)`** : rendre chaque page PDF en image base64 via canvas (pdf.js est déjà chargé), puis envoyer un message au parent et attendre la réponse :
-  ```js
-  async function extractPdfLines(file){
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-    const images = [];
-    for(let p=1; p<=pdf.numPages; p++){
-      const page = await pdf.getPage(p);
-      const vp = page.getViewport({scale: 2});
-      const canvas = document.createElement('canvas');
-      canvas.width = vp.width; canvas.height = vp.height;
-      await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
-      images.push(canvas.toDataURL('image/jpeg', 0.85));
-    }
-    // postMessage + Promise resolved par listener
-    return await requestAiExtract(images);
-  }
-  ```
-- Ajouter `requestAiExtract(images)` qui poste `{type:'vc:extract', id, images}` à `window.parent` et résout la Promise quand le parent répond `{type:'vc:extract:result', id, lines}`.
+**Décision demandée plus tard.** Pour V40 on reste sur Option A.
 
-### 2. Côté route React (`src/routes/_authenticated/vaccicheck.tsx`)
+---
 
-Ajouter un `useEffect` qui écoute les messages de l'iframe, appelle la server fn `extractCarnetLines` (auth déjà attachée par `attachSupabaseAuth`), et renvoie le résultat dans l'iframe.
+### 3. Checkproofing PIQ (vérification des recommandations)
 
-### 3. Server function (`src/lib/vaccine-extract.functions.ts`)
+Tu fourniras des cas cliniques fictifs ; pour chaque cas je :
+1. Lis la fiche PIQ pertinente (URLs ci-dessous archivées comme référence).
+2. Simule le cas dans VacciCheck.
+3. Compare la recommandation générée vs la recommandation PIQ attendue.
+4. Liste les écarts et propose les correctifs au moteur.
 
-Remplacer la fn existante (qui renvoyait un format custom) par `extractCarnetLines({ pageImages })` qui :
-- Pour chaque image, appelle Lovable AI Gateway (Gemini 2.5 Pro vision) en parallèle (max 4 simultanés)
-- Prompt système : « Reproduis chaque ligne du tableau de vaccination telle quelle, un vaccin par ligne, avec date, antigène/produit, lot, volume, site, notes — sans rien fusionner ni omettre. Pas de Markdown, juste du texte brut. »
-- Renvoie `string[]` aplati avec `'__PAGE_BREAK__'` entre les pages
-- Persiste dans `vaccine_carnets` (texte brut concaténé) pour QA, comme aujourd'hui — protégé par `requireSupabaseAuth`
+**Liste de référence enregistrée en mémoire projet** (`mem://references/piq-vaccins`) : Tétanos, FJ, HA, HB, HAHB, Influenza, Mpox, Polio, Rage, RRO, Choléra/ECET, EJ, Chikungunya, Typhoïde (I & O), Méningocoque (B, ACWY, C).
 
-### 4. Nettoyage
+**Format proposé pour chaque round de checkproofing** :
+> Cas : âge, sexe, statut vaccinal, condition médicale, destination, durée, type de séjour.
+> → Je rapporte : ce que VacciCheck recommande, ce que le PIQ recommande, écarts, fix proposé.
 
-- Supprimer `src/lib/pdf-render.client.ts` (devenu inutile, le rendu se fait dans l'iframe).
-- Désinstaller `pdfjs-dist` côté React (toujours présent dans l'iframe via le bundle inline du HTML).
-- Garder les tables `vaccine_carnets` / `vaccine_entries` pour l'historique futur — pas de migration ici.
+---
 
-## Coût attendu par carnet
+### Détails techniques
 
-Carnet typique 4–6 pages → 4–6 appels Gemini 2.5 Pro vision en parallèle → environ **0,02 à 0,05 $ par carnet** sur l'AI balance. Le 1 $ gratuit mensuel couvre donc 20 à 50 carnets sans recharge.
+**Fichier modifié** : `public/vaccicheck-app.html` (sections `@media print` et `.logo`).
+**Fichier créé** : `public/test_v40.html` (copie téléchargeable).
+**Mémoire** : `mem://references/piq-vaccins` (liste d'URLs PIQ).
 
-## Hors périmètre
-
-- Pas de modification visuelle de l'app VacciCheck (le HTML reste identique).
-- Pas de re-écriture en React de la logique métier.
-- Pas de système de cache : chaque upload re-appelle l'IA (à voir plus tard si besoin).
-
-## Critère de succès
-
-Le PDF de 41 entrées qui posait problème extrait désormais **41 entrées** (ou un nombre proche), visibles dans le tableau VacciCheck comme avant — sans changer aucun comportement aval (recommandations, demi-doses, etc.).
+### Questions avant build
+1. Pour le point 2 (INSPQ), tu confirmes qu'on reste sur **Option A** (mise à jour manuelle) pour l'instant ?
+2. Pour le point 3, tu veux commencer par **quel vaccin** en premier ? (ex. Hépatite A, Tétanos, Fièvre jaune) — je préparerai 2-3 cas fictifs couvrant les zones grises et tu valideras les attendus avant que je lance la vérification.
