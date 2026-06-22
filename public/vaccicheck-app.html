@@ -1587,8 +1587,9 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     else if(hbEff>=3){ status='Complet'; msg='Série complète (≥ 3 doses équivalentes) chez l\'immunocompétent. Aucune dose supplémentaire requise.'; }
     else if(hbEff>0){
       const twNoteB = allTwinrixB ? `Note : Twinrix Junior (0,5 mL) ne contient que 10 µg d'antigène HB (½ dose adulte) ; le Twinrix adulte (1 mL) compte pour une dose HB complète. ` : '';
+      const twImmunoWarn = (allTwinrixB && (rg.immuno || rg.vih || rg.renale)) ? `⚠ <strong>Twinrix non recommandé chez l'immunodéprimé / VIH / dialysé :</strong> utiliser les vaccins monovalents Hépatite B en double dose (40 µg) à 0-1-2-6 mois et doser anti-HBs. ` : '';
       status = isTousB ? 'Recommandé' : 'À considérer';
-      msg=`${String(hbEff).replace('.',',')} dose(s) équivalente(s) au dossier. ${twNoteB}Compléter la série (0-1-6 mois). Contexte pays : `+inspqText;
+      msg=`${String(hbEff).replace('.',',')} dose(s) équivalente(s) au dossier. ${twNoteB}${twImmunoWarn}Compléter la série (0-1-6 mois). Contexte pays : `+inspqText;
     }
     else if(rg.sex||rg.tatouage||rg.sante||rg.renale){ status='Recommandé'; msg='Recommandé d\'office (exposition sang/sexe ou dialyse). '+inspqText; }
     else if(isTousB){ status='Recommandé'; msg='Recommandé pour tous selon le contexte pays. '+inspqText; }
