@@ -1551,7 +1551,7 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     const nbTwinrix = state.vaccineEntries.filter(e=>e.antigen==='Hépatite A+B').length;
     const allTwinrix = nbTwinrix>0 && nbTwinrix===haStats.count;
     // Règle pédiatrique : 1-19 ans + ≥ 1 dose HA effective = complet (SAUF immuno / VIH / hépato / rénale)
-    const youngHealthyHA = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.hepatique || rg.renale);
+    const youngHealthyHA = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.vih || rg.hepatique || rg.renale);
     if(youngHealthyHA && haEff>=1){
       return {status:'Complet', msg:"1-19 ans, ≥ 1 dose de Hépatite A reçue (0,5 mL ou 1 mL) — vaccination considérée complète chez l'enfant ou adolescent en santé. Exception : si jeune immunodéprimé, infecté par le VIH, ou atteint d'une maladie chronique hépatique ou rénale → administrer une 2e dose (intervalle minimal de 5 mois entre les doses). "+inspqText, urgent:false};
     }
