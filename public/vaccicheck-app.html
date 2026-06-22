@@ -2130,11 +2130,21 @@ const DECISION_TREES = {
   'Fièvre jaune'(ctx){
     const s = ctx.stats('Fièvre jaune');
     const age = ctx.age, rg = ctx.rg;
-    if(s.count>=1) return `<strong>Complet :</strong> 1 dose au dossier. Protection à vie selon l'OMS (depuis 2016). Certificat international valide à vie.`;
-    if(age!=null && age<9/12) return `<strong>⛔ Contre-indiqué (< 9 mois) :</strong> reporter le voyage si possible. < 6 mois : interdiction absolue. 6-8 mois : seulement si épidémie active et bénéfice/risque favorable.`;
+    if(rg.thymus) return `<strong>⛔ Contre-indication absolue — pathologie du thymus</strong> (thymome, thymectomie, myasthénie grave) : ne pas administrer. Lettre de dispense médicale + mesures antimoustiques rigoureuses.`;
+    if(rg.oeufAnaphylaxie) return `<strong>⛔ Contre-indication absolue — anaphylaxie aux œufs ou à la gélatine</strong> : ne pas administrer. Lettre de dispense médicale.`;
+    if(age!=null && age<6/12) return `<strong>⛔ Contre-indiqué (&lt; 6 mois) :</strong> interdiction absolue. Reporter le voyage.`;
+    if(s.count>=1){
+      let txt = `<strong>Complet :</strong> 1 dose au dossier. Protection à vie selon l'OMS (depuis 2016). Certificat international valide à vie.`;
+      if(rg.immuno || rg.vih || rg.grossesse){
+        txt += ` <br><strong>⚠ Rappel à envisager :</strong> si la 1re dose a été administrée alors que la personne était immunodéprimée, infectée par le VIH ou enceinte, la réponse immunitaire peut être sous-optimale — envisager 1 dose de rappel ≥ 10 ans après la 1re dose si exposition persiste.`;
+      }
+      return txt;
+    }
     let warn = '';
-    if(rg.immuno)    warn += ` <br><strong>⚠ Immunosuppression :</strong> contre-indication relative — évaluer bénéfice/risque, considérer une dispense médicale.`;
+    if(age!=null && age<9/12) warn += ` <br><strong>⚠ 6-8 mois :</strong> seulement si épidémie active et bénéfice/risque favorable.`;
+    if(rg.immuno || rg.vih) warn += ` <br><strong>⚠ Immunosuppression / VIH :</strong> contre-indication relative — évaluer bénéfice/risque (CD4 ≥ 200 requis pour VIH), considérer une dispense médicale.`;
     if(rg.grossesse) warn += ` <br><strong>⚠ Grossesse :</strong> contre-indication relative ; vaccin permis au 3e trimestre si voyage inévitable en zone d'endémie.`;
+    if(rg.allaitement) warn += ` <br><strong>⚠ Allaitement :</strong> précaution si le nourrisson allaité a &lt; 9 mois (transmission du virus vaccinal possible par le lait maternel) — reporter ou suspendre l'allaitement 2 semaines.`;
     if(age!=null && age>=60) warn += ` <br><strong>⚠ ≥ 60 ans (1re dose) :</strong> risque accru d'effets indésirables graves ; évaluation individuelle.`;
     return `<strong>Schéma standard :</strong> <em>YF-Vax / Stamaril</em> 1 dose SC (0,5 mL) ≥ 10 j avant le départ pour certificat OMS valide.${warn}`;
   },
