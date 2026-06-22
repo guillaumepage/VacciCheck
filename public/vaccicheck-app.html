@@ -1877,7 +1877,8 @@ const DECISION_TREES = {
       return txt;
     }
     // 0 dose
-    if(age!=null && age<1) return `<strong>&lt; 1 an :</strong> vaccin non recommandé en routine ; immunoglobulines (Ig 0,02 mL/kg IM, max 2 mL) si voyage en zone endémique avec départ &lt; 2 semaines.`;
+    if(age!=null && age<0.5) return `<strong>&lt; 6 mois :</strong> vaccin non indiqué ; immunoglobulines (Ig 0,02 mL/kg IM, max 2 mL) si voyage en zone endémique avec départ &lt; 2 semaines.`;
+    if(age!=null && age<1) return `<strong>6-11 mois (pré-voyage) :</strong> vaccination possible avec 1 dose pédiatrique 0,5 mL (<em>Havrix Junior / Avaxim Pédiatrique / Vaqta</em>) ≥ 14 j avant le départ. <strong>Cette dose n'est pas comptée dans le calendrier régulier</strong> : refaire 2 doses standard à partir de l'âge de 12 mois (intervalle 6-12 mois). Sinon, Ig 0,02 mL/kg IM (max 2 mL) seulement.`;
     let txt;
     if(age!=null && age<18){
       txt = `<strong>Schéma pédiatrique (1-17 ans) :</strong> 2 doses de <em>Havrix Junior</em> ou <em>Avaxim Pédiatrique</em> ou <em>Vaqta 0,5 mL</em> (0,5 mL) à 0 et 6-12 mois (intervalle minimal 5 mois). Protection ≥ 14 j après la 1re dose.`;
