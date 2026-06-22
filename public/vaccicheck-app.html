@@ -1963,7 +1963,7 @@ const DECISION_TREES = {
     } else if(cat==='pediatrique' || (age!=null && age<20)){
       txt = `<strong>Schéma pédiatrique :</strong> 3 doses de <em>Engerix-B Pédiatrique</em> ou <em>Recombivax HB Pédiatrique</em> (0,5 mL) à 0-1-6 mois.`;
     } else {
-      txt = `<strong>Schéma adulte :</strong> 3 doses de <em>Engerix-B</em> ou <em>Recombivax HB</em> (1 mL) à 0-1-6 mois, OU <em>Heplisav-B</em> 2 doses à 0 et 1 mois. <br><em>Schéma accéléré si départ imminent :</em> 0-7-21 j + rappel à 12 mois.`;
+      txt = `<strong>Schéma adulte :</strong> 3 doses de <em>Engerix-B</em> ou <em>Recombivax HB</em> (1 mL) à 0-1-6 mois. <br><em>Schéma accéléré si départ imminent (&lt; 21 j) :</em> Engerix-B / Twinrix adulte 0-7-21 j + rappel à 12 mois. <br><em>Note :</em> Heplisav-B (2 doses 0-1 mois) n'est pas inscrit au PIQ Québec — usage hors-PIQ seulement.`;
     }
     if(antiHBs!=null && antiHBs<10){
       txt += ` <br><strong>Anti-HBs antérieur ${antiHBs} UI/L (&lt; 10) :</strong> non-répondeur — appliquer la stratégie double dose ci-dessus et redoser 1-2 mois après la dernière dose.`;
