@@ -1245,6 +1245,9 @@ function effectiveDoseCount(targetAntigen){
 function clinicalRiskGroups(){
   return {
     immuno: q_immuno.checked || q_greffe.checked || q_biologique.checked || (q_vih.checked && q_vih_cd4.checked),
+    vih: q_vih.checked,
+    thymus: (document.getElementById('q_thymus')||{}).checked===true,
+    oeufAnaphylaxie: (document.getElementById('q_oeuf_anaphylaxie')||{}).checked===true,
     asplenie: q_asplenie.checked,
     hepatique: q_hepatique.checked,
     renale: q_renale.checked,
