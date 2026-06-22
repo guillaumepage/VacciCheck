@@ -1606,10 +1606,12 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
       if(t.includes('exigence')||t.includes('certificat')) msg='ℹ Exigence douanière possible si transit par pays endémique. Immunisation non recommandée pour ce pays. '+inspqText;
     } else if(inspqClass==='tous'||inspqClass==='requis'||t.includes('immunisation pour tous')){
       status='Recommandé'; urgent=true; msg='Vaccin requis pour entrée et/ou présence de la maladie. '+inspqText;
-      if(rg.immuno||rg.grossesse) msg='⚠ Contre-indications relatives (immunosuppression/grossesse). Évaluer bénéfice/risque + lettre de dispense. '+inspqText;
+      if(rg.thymus||rg.oeufAnaphylaxie) msg='⛔ Contre-indication ABSOLUE (pathologie du thymus ou anaphylaxie œufs/gélatine) — lettre de dispense médicale. '+inspqText;
+      else if(rg.immuno||rg.grossesse) msg='⚠ Contre-indications relatives (immunosuppression/grossesse). Évaluer bénéfice/risque + lettre de dispense. '+inspqText;
     } else if(inspqClass==='considerer'){
       status='À considérer';
-      if(rg.immuno||rg.grossesse) msg='⚠ Contre-indications relatives. '+inspqText;
+      if(rg.thymus||rg.oeufAnaphylaxie) msg='⛔ Contre-indication ABSOLUE — lettre de dispense médicale. '+inspqText;
+      else if(rg.immuno||rg.grossesse) msg='⚠ Contre-indications relatives. '+inspqText;
     }
     return {status, msg, urgent};
   }
