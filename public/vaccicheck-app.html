@@ -1573,7 +1573,7 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     const nbTwinrixB = state.vaccineEntries.filter(e=>e.antigen==='Hépatite A+B').length;
     const allTwinrixB = nbTwinrixB>0 && nbTwinrixB===hbStats.count;
     // Règle pédiatrique : 1-19 ans + ≥ 2 doses de HB (0,5 mL) = complet
-    const youngHealthyHB = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.renale);
+    const youngHealthyHB = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.vih || rg.renale);
     if(youngHealthyHB && hbEff>=2){
       return {status:'Complet', msg:'1-19 ans, ≥ 2 doses équivalentes de Hépatite B — vaccination considérée complète chez l\'enfant ou adolescent en santé. '+inspqText, urgent:false};
     }
