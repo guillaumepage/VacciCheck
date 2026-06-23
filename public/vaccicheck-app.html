@@ -2349,6 +2349,57 @@ DECISION_TREES['Méningocoque ACYW'] = DECISION_TREES['Méningocoque'];
 DECISION_TREES['Méningocoque B']    = DECISION_TREES['Méningocoque'];
 DECISION_TREES['Méningocoque C']    = DECISION_TREES['Méningocoque'];
 
+/* ------------------- RAGE (PIQ) — pré-exposition (PrEP) + post-exposition (PEP) ------------------- */
+DECISION_TREES['Rage'] = function(ctx){
+  const s = ctx.stats('Rage');
+  const age = ctx.age, rg = ctx.rg||{};
+  const exposureLevel = (document.getElementById('q_rage_exposure')||{}).value || '';
+  const txt = ctx.inspqText||'';
+  const highRisk = /risque\s+élevé|endémique|enzootique/i.test(txt);
+  const rigDispo = !/RIg\s*:\s*pas facilement disponible|RIg\s*:\s*disponibilité limitée/i.test(txt) ? 'standard' :
+                   /RIg\s*:\s*pas facilement disponible/i.test(txt) ? 'rare' : 'limitée';
+
+  // Statut vaccinal
+  if(s.count>=2){
+    const since = s.yearsSinceLast;
+    const sinceTxt = since!=null ? `il y a ${since.toFixed(1)} an(s)` : '';
+    return `<strong>Pré-exposition complète :</strong> ${s.count} dose(s) au dossier ${sinceTxt}. <br>
+      <strong>En cas d'exposition (PEP « vacciné ») :</strong> 2 doses de vaccin rabique IM (1 mL deltoïde) à <strong>J0 et J3</strong>, <strong>aucune Ig antirabique requise</strong>. Nettoyage immédiat de la plaie (eau + savon ≥ 15 min). <br>
+      <em>Rappel pré-voyage :</em> non requis sauf exposition professionnelle continue avec titre anti-rabique &lt; 0,5 UI/mL.`;
+  }
+  if(s.count===1){
+    return `<strong>Pré-exposition incomplète :</strong> 1 dose au dossier. Administrer la <strong>2e dose à J7</strong> (schéma IM 2 doses J0-J7). <em>Ancien schéma 3 doses 0-7-21/28 j toujours valide si déjà entamé.</em>`;
+  }
+
+  // PrEP — recommandation selon exposition cochée
+  let prep = '';
+  if(exposureLevel){
+    const labels = {
+      A:"Groupe A — chauves-souris (spéléologie, vétérinaire/animalier)",
+      B:"Groupe B — mammifères sauvages (activités extérieures prolongées, séjour prolongé/répété, enfants en bas âge)",
+      C:"Groupe C — mammifères domestiques, chiens errants (zones urbaines/rurales)"
+    };
+    prep = `<strong>Pré-exposition (PrEP) recommandée — ${labels[exposureLevel]} :</strong> <em>Imovax Rabies / RabAvert</em> <strong>2 doses IM</strong> (1 mL deltoïde, ou face antéro-latérale cuisse &lt; 1 an) à <strong>J0 et J7</strong>. <br>
+      <em>Voie intradermique (ID)</em> 0,1 mL × 1 site à J0 et J7 — équivalente, économique mais usage hors monographie au Canada ; disponibilité variable.<br>
+      <em>Sérologie post-vaccinale</em> (titre ≥ 0,5 UI/mL) uniquement pour exposition professionnelle/continue. Rappels non requis sauf titre insuffisant.`;
+  } else if(highRisk){
+    prep = `<strong>Pré-exposition à envisager</strong> selon évaluation individuelle — pays à risque élevé. Cocher la question « Exposition animale potentielle » dans le profil pour préciser le groupe. Schéma : <em>Imovax Rabies / RabAvert</em> 2 doses IM à J0 et J7.`;
+  } else {
+    prep = `<strong>Pré-exposition selon évaluation individuelle.</strong> Schéma : 2 doses IM à J0 et J7 (<em>Imovax Rabies / RabAvert</em>).`;
+  }
+
+  // Bloc PEP — toujours informatif
+  const rigNote = rigDispo==='rare' ? ' <strong>⚠ RIg pas facilement disponible dans ce pays</strong> — évaluer évacuation médicale vers pays avec RIg.' :
+                  rigDispo==='limitée' ? ' <em>⚠ RIg à disponibilité limitée dans ce pays.</em>' : '';
+  const pep = ` <br><br><strong>📌 En cas d'exposition (PEP) — <u>non vacciné</u> :</strong> nettoyage immédiat de la plaie (eau + savon ≥ 15 min, puis solution virucide / povidone iodée). <em>Immunoglobulines antirabiques (Imogam Rage Pasteurisé)</em> <strong>20 UI/kg</strong> infiltrées dans et autour de la plaie (résidu IM site distant du vaccin) + <em>vaccin rabique</em> <strong>4 doses IM à J0, J3, J7 et J14</strong> (5e dose à J28 si immunodéprimé). Site IM différent du RIg.${rigNote}`;
+
+  let warn = '';
+  if(age!=null && age<1) warn = ` <br><em>⚠ &lt; 1 an : PrEP possible si exposition à risque — consulter centre spécialisé.</em>`;
+  if(rg.immuno || rg.vih) warn += ` <br><em>⚠ Immunosuppression / VIH :</em> sérologie post-PrEP recommandée ; PEP toujours avec Ig + 5 doses vaccin (J0-J3-J7-J14-J28).`;
+
+  return prep + warn + pep;
+};
+
 /* ------------------- CHOLÉRA (Partie 2 Jotform) ------------------- */
 const DUKORAL_INTERVAL_NOTE = `<br><em>Intervalles Dukoral :</em> recommandé/minimal 1 semaine, maximal 6 semaines entre les doses (au-delà de 6 semaines : <strong>recommencer la série complète</strong>). Si > 5 ans depuis la dernière dose : <strong>revaccination complète</strong>.`;
 DECISION_TREES['Choléra'] = function(ctx){
