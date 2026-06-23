@@ -2297,8 +2297,10 @@ const DECISION_TREES = {
   /* ------------------- TÉTANOS / DCaT (Partie 3) — auto via carnet ------------------- */
   'Tétanos'(ctx){
     const s = ctx.stats('DCaT');
-    const age = ctx.age;
+    const age = ctx.age, rg = ctx.rg||{};
     if(age==null) return `<em>Saisir la date de naissance pour calculer la posologie.</em>`;
+    // Grossesse — dcaT à chaque grossesse entre 27 et 32 SA (PIQ)
+    const pregnancyNote = rg.grossesse ? ` <br><strong>⚠ Grossesse — dcaT recommandé à chaque grossesse entre 27 et 32 semaines</strong> d'aménorrhée (idéalement) ; acceptable de 26 à 36 SA, indépendamment du statut vaccinal antérieur. Permet le transfert d'anticorps coqueluche au nouveau-né.` : '';
     if(age < 1) return `<strong>Primovaccination :</strong> DCaT-HB-VPI-Hib (Pediacel/Pentacel/Infanrix-hexa) à 2, 4 et 6 mois.`;
     if(age < 4){
       if(s.count>=4) return `<strong>Complet (primovaccination + rappel 18 mois) :</strong> aucune dose supplémentaire avant le rappel de 4-6 ans.`;
