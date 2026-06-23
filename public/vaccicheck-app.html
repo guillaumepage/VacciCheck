@@ -2327,9 +2327,22 @@ const DECISION_TREES = {
       return `<strong>Rappel adulte :</strong> 1 dose de <em>dT</em> (ou <em>dcaT</em> si non reçue à 50 ans) — plus de 10 ans depuis la dernière dose.`;
     if(since!=null && since>5)
       return `<strong>Voyageur :</strong> envisager 1 rappel <em>dT</em> avant le départ (> 5 ans depuis la dernière dose), surtout si risque de plaie ou accès aux soins limité.`;
-    return `<strong>Complet :</strong> dernière dose il y a ${since!=null?since.toFixed(1):'?'} an(s). Prochain rappel : à 50 ans (si pas de dose après 40 ans), puis q 10 ans en voyage.`;
+    return `<strong>Complet :</strong> dernière dose il y a ${since!=null?since.toFixed(1):'?'} an(s). Prochain rappel : à 50 ans (si pas de dose après 40 ans), puis q 10 ans en voyage.${pregnancyNote}`;
   }
 };
+
+// Append pregnancy note to all adult tetanus return paths
+(function patchTetanusPregnancy(){
+  const orig = DECISION_TREES['Tétanos'];
+  DECISION_TREES['Tétanos'] = function(ctx){
+    const out = orig(ctx);
+    const rg = ctx.rg||{};
+    if(rg.grossesse && !/grossesse/i.test(out)){
+      return out + ` <br><strong>⚠ Grossesse — dcaT recommandé à chaque grossesse entre 27 et 32 SA</strong> (acceptable 26-36 SA), indépendamment du statut vaccinal antérieur (PIQ).`;
+    }
+    return out;
+  };
+})();
 
 // Alias pour entrées INSPQ libellées différemment
 DECISION_TREES['Méningocoque ACYW'] = DECISION_TREES['Méningocoque'];
