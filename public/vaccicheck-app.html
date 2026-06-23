@@ -2095,6 +2095,9 @@ const DECISION_TREES = {
                     rg.immuno || rg.asplenie || rg.gastric || rg.waterRisk ||
                     (age!=null && age<18);
 
+    // Contre-indications Vivotif (oral, vivant atténué Ty21a)
+    const vivotifCI = rg.immuno || rg.vih || rg.grossesse;
+
     // Posologie (statut)
     let posol;
     if(s.yearsSinceLast!=null && s.yearsSinceLast<boosterYears && s.count>0){
@@ -2102,11 +2105,15 @@ const DECISION_TREES = {
     } else if(s.count>0){
       posol = `<strong>Délai dépassé :</strong> dernière dose de <em>${productLbl}</em> il y a ${s.yearsSinceLast!=null?s.yearsSinceLast.toFixed(1)+' an(s)':'date inconnue'} — > ${boosterYears} ans (barème ${boosterYears} ans). <strong>Revaccination requise</strong> avant exposition.`;
     } else if(age!=null && age<2){
-      posol = `<strong>< 2 ans :</strong> vaccin polysaccharidique non recommandé (immunogénicité insuffisante). Vivotif contre-indiqué < 5 ans. Mesures hygiéno-diététiques.`;
+      posol = `<strong>&lt; 2 ans :</strong> vaccin polysaccharidique non recommandé (immunogénicité insuffisante). Vivotif contre-indiqué &lt; 5 ans. Mesures hygiéno-diététiques.`;
+    } else if(age!=null && age<5){
+      posol = `<strong>2-4 ans :</strong> <em>Typhim Vi / Typherix</em> 1 dose IM (0,5 mL) ≥ 14 j avant le départ. Rappel q 3 ans. <em>(Vivotif contre-indiqué &lt; 5 ans.)</em>`;
     } else if(age!=null && age<6){
-      posol = `<strong>2-5 ans :</strong> <em>Typhim Vi / Typherix</em> 1 dose IM (0,5 mL) ≥ 14 j avant le départ. Rappel q 3 ans.`;
+      posol = `<strong>5 ans :</strong> <em>Typhim Vi / Typherix</em> 1 dose IM (0,5 mL) ≥ 14 j avant le départ. Rappel q 3 ans.`;
+    } else if(vivotifCI){
+      posol = `<strong>Adulte / ≥ 6 ans :</strong> <em>Typhim Vi / Typherix</em> 1 dose IM (rappel q 3 ans) ≥ 14 j avant le départ. <strong>⛔ Vivotif contre-indiqué</strong> (immunosuppression / VIH / grossesse — vaccin vivant atténué). <em>Note :</em> Vivotif aussi à éviter pendant antibiothérapie (espacer ≥ 72 h) ou méfloquine (espacer ≥ 24 h).`;
     } else {
-      posol = `<strong>Adulte / ≥ 6 ans :</strong> <em>Typhim Vi / Typherix</em> 1 dose IM (rappel q 3 ans) <em>ou</em> <em>Vivotif</em> oral 1 capsule à J1-3-5-7 (rappel q 7 ans). ≥ 14 j avant le départ.`;
+      posol = `<strong>Adulte / ≥ 6 ans :</strong> <em>Typhim Vi / Typherix</em> 1 dose IM (rappel q 3 ans) <em>ou</em> <em>Vivotif</em> oral 1 capsule à J1-3-5-7 (rappel q 7 ans). ≥ 14 j avant le départ. <em>Vivotif :</em> espacer ≥ 72 h de tout antibiotique et ≥ 24 h de la méfloquine.`;
     }
 
     // Catégorisation
