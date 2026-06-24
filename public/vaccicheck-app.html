@@ -1712,18 +1712,62 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     }
     return {status:'Non requis', msg:inspqText, urgent, secondaryBadge:'À considérer', considerGroups:PARTICULAR_GROUPS_HTML['Choléra']};
   }
-  // ---- Encéphalite japonaise
+  // ---- Encéphalite japonaise (V43 — fixes #8 #9 #10)
   if(disease==='Encéphalite japonaise'){
     const pgE = particularGroupsMatch('Encéphalite japonaise', rg, age, inspqText, '');
+    let preamble = '';
+    // FIX #10 — CI : anaphylaxie protamine (Ixiaro contient protamine sulfate) ; précaution grossesse
+    if(rg.oeufAnaphylaxie){
+      preamble += `<br><strong>⚠ Précaution :</strong> Ixiaro contient du sulfate de protamine — antécédent d'anaphylaxie à la protamine = contre-indication absolue. Vérifier l'allergène précis avant administration.`;
+    }
+    if(rg.grossesse){
+      preamble += `<br><strong>⚠ Grossesse :</strong> Ixiaro est généralement évité durant la grossesse (données limitées). N'administrer que si l'exposition à risque est inévitable.`;
+    }
+    // FIX #8/#9 — Calendrier (Ixiaro 18-65 ans : schéma standard J0-J28 OU accéléré J0-J7 ; rappel ≥1 an si exposition persiste)
+    let daysToDepEJ = null;
+    try{
+      const dep = parseDate((document.getElementById('date_depart')||{}).value);
+      if(dep) daysToDepEJ = Math.max(0, Math.round((dep - new Date())/(24*3600*1000)));
+    }catch(e){}
+    const sEJ = vaccineStats('Encéphalite japonaise');
+    let scheduleMsg = '';
+    if(age!=null && age>=18 && age<=65){
+      if(daysToDepEJ!=null && daysToDepEJ<28 && daysToDepEJ>=7){
+        scheduleMsg = `<br><strong>Schéma accéléré (18-65 ans) :</strong> 2 doses Ixiaro IM à J0 et J7 (autorisé si départ &lt; 28 j). Idéalement compléter ≥ 7 j avant le départ.`;
+      } else {
+        scheduleMsg = `<br><strong>Schéma standard :</strong> 2 doses Ixiaro IM à J0 et J28 (préférer terminer ≥ 7 j avant départ). Schéma accéléré J0-J7 possible chez 18-65 ans si départ rapproché.`;
+      }
+    } else if(age!=null && age>2 && age<18){
+      scheduleMsg = `<br><strong>Pédiatrique (3-17 ans) :</strong> 2 doses Ixiaro 0,25 mL (&lt; 3 ans) ou 0,5 mL (≥ 3 ans) à J0 et J28. Le schéma accéléré n'est homologué qu'à partir de 18 ans.`;
+    } else if(age!=null && age>65){
+      scheduleMsg = `<br><strong>≥ 65 ans :</strong> Schéma standard J0-J28 ; le schéma accéléré n'est pas homologué dans ce groupe d'âge.`;
+    }
+    if(sEJ.count>=2 && sEJ.yearsSinceLast!=null && sEJ.yearsSinceLast>=1){
+      scheduleMsg += `<br><strong>Rappel :</strong> Primovaccination terminée il y a ${sEJ.yearsSinceLast.toFixed(1)} an(s) — administrer 1 dose de rappel si l'exposition au risque persiste (rappel recommandé ≥ 1 an après la primovaccination).`;
+    }
     if(pgE.match){
-      return {status:'Recommandé', msg:`Recommandé — groupe particulier identifié au questionnaire clinique : ${pgE.motifs.join(', ')}. `+inspqText, urgent,
+      return {status:'Recommandé', msg:`Recommandé — groupe particulier identifié au questionnaire clinique : ${pgE.motifs.join(', ')}. `+inspqText+preamble+scheduleMsg, urgent,
         considerGroups: PARTICULAR_GROUPS_HTML['Encéphalite japonaise'], matchedKeywords: matchedKeywordsForDisease('Encéphalite japonaise', rg, age, pgE.motifs)};
     }
-    return {status:'Non requis', msg:inspqText, urgent, secondaryBadge:'À considérer', considerGroups:PARTICULAR_GROUPS_HTML['Encéphalite japonaise']};
+    return {status:'Non requis', msg:inspqText+preamble+scheduleMsg, urgent, secondaryBadge:'À considérer', considerGroups:PARTICULAR_GROUPS_HTML['Encéphalite japonaise']};
   }
-  // ---- Méningocoque
+  // ---- Méningocoque (V43 — fixes #4 #5 #6 #7)
   if(d.includes('méningocoque')||d.includes('méningite')){
-    // Check vaccin Men-C-ACYW (Menveo / Nimenrix / Menactra) au dossier
+    // FIX #4 — Men-ACWY par âge : produit selon âge (PIQ)
+    let ageProduit = '';
+    if(age!=null){
+      if(age<0.17) ageProduit = `<br><strong>Produit selon l'âge :</strong> Nimenrix dès 6 semaines ; Menveo dès 2 mois ; Menactra dès 9 mois.`;
+      else if(age<0.75) ageProduit = `<br><strong>Produit selon l'âge :</strong> Nimenrix ou Menveo (Menactra dès 9 mois).`;
+      else if(age<2) ageProduit = `<br><strong>Produit selon l'âge :</strong> Nimenrix, Menveo ou Menactra acceptés. Sous 24 mois : schéma à 2 doses (intervalle ≥ 8 sem) puis rappel.`;
+      else ageProduit = `<br><strong>Produit :</strong> Nimenrix, Menveo ou Menactra (1 dose chez 2 ans et +, immunocompétent).`;
+    }
+    // FIX #5 — La Mecque / Hajj-Oumra : Men-ACWY conjugué obligatoire ≥10 j avant arrivée, certificat valide 5 ans
+    const destText = (inspqText||'').toLowerCase();
+    let mecqueMsg = '';
+    if(/mecque|hajj|oumra|arabie saoudite|saudi/i.test(destText) || /mecque|hajj|oumra|arabie/i.test(((document.getElementById('destination')||{}).value||'').toLowerCase())){
+      mecqueMsg = `<br><strong>⚠ Hajj / Oumra (Arabie saoudite) :</strong> Vaccin Men-ACWY conjugué quadrivalent OBLIGATOIRE pour l'entrée. Doit être administré au moins 10 jours avant l'arrivée et de moins de 5 ans (certificat exigé). Le vaccin polysaccharidique n'est plus accepté.`;
+    }
+    // Check vaccin Men-C-ACYW au dossier
     const lastMACYW = state.vaccineEntries
       .filter(e=>/men-?c-?acyw|menveo|nimenrix|menactra|\bacyw\b/i.test(`${e.antigen||''} ${e.product||''}`))
       .map(e=>parseDate(e.date)).filter(Boolean).sort((a,b)=>b-a)[0];
@@ -1732,16 +1776,34 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
       const boosterY = (age!=null && age<7) ? 3 : 5;
       if(yrs < boosterY){
         return {status:'Complet',
-          msg:`Men-C-ACYW-135 reçu il y a ${yrs.toFixed(1)} an(s) — protection en cours (rappel q ${boosterY} ans si l'exposition persiste). `+inspqText,
+          msg:`Men-C-ACYW-135 reçu il y a ${yrs.toFixed(1)} an(s) — protection en cours (rappel q ${boosterY} ans si l'exposition persiste). `+inspqText+mecqueMsg,
           urgent:false, considerGroups: PARTICULAR_GROUPS_HTML['Méningocoque']};
       }
     }
+    // FIX #6 #7 — Men-B : Bexsero et Trumenba non interchangeables + groupes particuliers
+    const menBEntries = state.vaccineEntries.filter(e=>/men-?b|bexsero|trumenba/i.test(`${e.antigen||''} ${e.product||''}`));
+    let menBMsg = '';
+    if(menBEntries.length>0){
+      const hasBex = menBEntries.some(e=>/bexsero/i.test(e.product||''));
+      const hasTru = menBEntries.some(e=>/trumenba/i.test(e.product||''));
+      if(hasBex && hasTru){
+        menBMsg = `<br><strong>⚠ Men-B :</strong> Bexsero et Trumenba ne sont PAS interchangeables. La série doit être complétée avec le même produit que la 1re dose.`;
+      }
+    }
+    const menBGroupe = rg.asplenie || rg.immuno || /complément|complement|déficit.*complement|éclosion|laboratoire.*neisseria|hsh/i.test((destText||'')+(rg.notes||''));
+    if(menBGroupe){
+      menBMsg += `<br><strong>Men-B (groupes particuliers PIQ) :</strong> à offrir en cas de déficit en complément/properdine/facteur D, asplénie/hyposplénie, éclosion à sérogroupe B, ou personnel de laboratoire manipulant Neisseria meningitidis. Bexsero (2-6 mois : 3+1 ; 6-23 mois : 2+1 ; ≥ 2 ans : 2 doses) ou Trumenba (≥ 10 ans : 2-3 doses).`;
+    }
     const pgM = particularGroupsMatch('Méningocoque', rg, age, inspqText, '');
     if(pgM.match){
-      return {status:'Recommandé', msg:`Recommandé — ${pgM.motifs.join(' ; ')}. `+inspqText, urgent,
+      return {status:'Recommandé', msg:`Recommandé — ${pgM.motifs.join(' ; ')}. `+inspqText+ageProduit+mecqueMsg+menBMsg, urgent,
         considerGroups: PARTICULAR_GROUPS_HTML['Méningocoque'], matchedKeywords: matchedKeywordsForDisease('Méningocoque', rg, age, pgM.motifs)};
     }
-    return {status:'Non requis', msg:inspqText, urgent, secondaryBadge:'À considérer', considerGroups:PARTICULAR_GROUPS_HTML['Méningocoque']};
+    if(mecqueMsg){
+      return {status:'Recommandé', msg:`Exigence d'entrée. `+inspqText+ageProduit+mecqueMsg+menBMsg, urgent:true,
+        considerGroups: PARTICULAR_GROUPS_HTML['Méningocoque']};
+    }
+    return {status:'Non requis', msg:inspqText+ageProduit+menBMsg, urgent, secondaryBadge:'À considérer', considerGroups:PARTICULAR_GROUPS_HTML['Méningocoque']};
   }
   // ---- Poliomyélite — Complet si éliminée + primovaccination complète
   if(disease==='Poliomyélite'){
