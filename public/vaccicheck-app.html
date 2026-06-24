@@ -1833,20 +1833,43 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     }
     return {status, msg, urgent};
   }
-  // ---- Rougeole — endémique / présente : recommandation basée sur le carnet RRO
+  // ---- Rougeole (V43 — fixes #1 #2 #3)
   if(disease==='Rougeole'){
     const isEndemic = /endémique|immunisation de base|hausse|éclosion|présente/i.test(t);
+    const isOutbreak = /éclosion|hausse|épidémie/i.test(t);
     if(isEndemic || inspqClass==='tous' || inspqClass==='considerer'){
       const ror = isDoseCountFor('RRO');
       const dob = parseDate(dob_el && dob_el.value);
       const birthYear = dob ? dob.getFullYear() : null;
-      if(birthYear!=null && birthYear<1970){
+      // FIX #2 — Nourrisson 6-11 mois en zone à risque : 1 dose précoce (ne compte pas, refaire série ≥12 mois)
+      if(age!=null && age<1 && age>=0.5){
+        return {status:'Recommandé',
+          msg:`<strong>Nourrisson 6-11 mois</strong> en zone à risque rougeole : administrer 1 dose RRO précoce (protection partielle). Cette dose ne compte PAS dans le calendrier régulier — la série de 2 doses doit être recommencée à l'âge de 12 mois et 18 mois. `+inspqText,
+          urgent:isOutbreak};
+      }
+      if(age!=null && age<0.5){
+        return {status:'Non requis', msg:`Nourrisson &lt; 6 mois : RRO contre-indiqué. Protection par anticorps maternels ; renforcer mesures non-pharmacologiques. `+inspqText, urgent:false};
+      }
+      // FIX #1 — Né avant 1970 : immunité présumée SEULEMENT en contexte non-voyage à haut risque
+      if(birthYear!=null && birthYear<1970 && !isOutbreak){
         return {status:'Complet', msg:'Né avant 1970 — présumé immun (exposition naturelle). '+inspqText, urgent:false};
+      }
+      if(birthYear!=null && birthYear<1970 && isOutbreak){
+        return {status:'À considérer', msg:`<strong>Né avant 1970</strong> : présumé immun en règle générale, mais en contexte d'éclosion active ou de voyage à haut risque (ex : travailleur santé, soignant, contact étroit), une sérologie ou 1 dose RRO peut être considérée. `+inspqText, urgent:false};
       }
       if(ror>=2){
         return {status:'Complet', msg:`2 doses RRO au dossier — immunité présumée. ${inspqText}`, urgent:false};
       }
-      return {status:'Recommandé', msg:(ror===1?'1 dose RRO au dossier — administrer la 2e dose. ':'Vaccination RRO recommandée (immunisation de base). ')+inspqText, urgent};
+      // FIX #3 — Si 1 dose au dossier : préciser intervalle minimal 4 semaines avant 2e dose
+      if(ror===1){
+        const sR = vaccineStats('RRO');
+        const weeksSince = sR.yearsSinceLast!=null ? sR.yearsSinceLast*52 : null;
+        const intervalOK = weeksSince==null || weeksSince>=4;
+        return {status:'Recommandé',
+          msg:`1 dose RRO au dossier — administrer la 2e dose${intervalOK?'':' (respecter intervalle minimal de 4 semaines depuis la 1re dose)'}. Intervalle minimal entre 2 doses RRO : 4 semaines. `+inspqText,
+          urgent};
+      }
+      return {status:'Recommandé', msg:`Vaccination RRO recommandée : 2 doses à ≥ 4 semaines d'intervalle (1re dose dès 12 mois en routine). `+inspqText, urgent};
     }
     return {status, msg, urgent};
   }
