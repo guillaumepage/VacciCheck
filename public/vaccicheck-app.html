@@ -1278,6 +1278,8 @@ function clinicalRiskGroups(){
     vfr: q_visite_famille.checked,
     doute: q_doute.checked,
     diabete: q_diabete.checked,
+    cardio: (document.getElementById('q_cardio')||{}).checked===true,
+    pulmonaire: (document.getElementById('q_pulmonaire')||{}).checked===true,
   };
 }
 
