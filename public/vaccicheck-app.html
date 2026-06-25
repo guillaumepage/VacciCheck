@@ -2311,12 +2311,19 @@ const DECISION_TREES = {
   /* ------------------- CHIKUNGUNYA (Partie 3) — ≥ 12 ans depuis 2025 ------------------- */
   'Chikungunya'(ctx){
     const s = ctx.stats('Chikungunya');
-    const age = ctx.age;
+    const age = ctx.age, rg = ctx.rg||{};
+    // V44 — fix #1 (CRITIQUE) : Ixchiq = vaccin vivant atténué → CI grossesse, allaitement, immunosuppression
+    if(rg.grossesse) return `<strong>⚠ Contre-indiqué — grossesse :</strong> <em>Ixchiq</em> est un vaccin vivant atténué, formellement contre-indiqué en cours de grossesse. Différer la vaccination après l'accouchement, ou reporter le voyage. Insister sur la protection antimoustiques (DEET, vêtements longs, moustiquaire).`;
+    if(rg.allaitement) return `<strong>⚠ Allaitement :</strong> <em>Ixchiq</em> (vaccin vivant atténué) — éviter sauf si le bénéfice surpasse le risque (passage dans le lait maternel possible). Évaluation individuelle.`;
+    if(rg.immuno) return `<strong>⚠ Contre-indiqué — immunosuppression :</strong> <em>Ixchiq</em> est un vaccin vivant atténué, contre-indiqué en cas d'immunosuppression sévère (VIH CD4&lt;200, greffe, biologiques anti-TNF/CD20/JAKi, chimiothérapie). Protection antimoustiques renforcée.`;
+    // V44 — fix #9 : cardiopathie chronique sévère = précaution (effets indésirables graves cardiaques rapportés)
+    if(rg.cardio && (age!=null && age>=65)) return `<strong>⚠ Précaution — cardiopathie chronique + ≥ 65 ans :</strong> évaluation bénéfice/risque stricte. Effets indésirables graves cardiovasculaires rapportés post-commercialisation. Préférer la protection antimoustiques si exposition courte.`;
     if(s.count>=1) return `<strong>Complet :</strong> 1 dose au dossier. Durée de protection en cours d'évaluation — pas de rappel établi.`;
     if(age!=null && age<12) return `<strong>< 12 ans :</strong> <em>Ixchiq</em> non homologué chez les enfants de moins de 12 ans au Canada. Insister sur la protection antimoustiques (DEET, vêtements longs, moustiquaire).`;
     if(age!=null && age<18) return `<strong>12-17 ans :</strong> <em>Ixchiq</em> 1 dose SC (0,5 mL) ≥ 28 j avant le départ. Indiqué pour voyageurs en zone d'éclosion active ou exposition prolongée.`;
-    if(age!=null && age>=65) return `<strong>≥ 65 ans :</strong> évaluation bénéfice/risque (effets indésirables graves rapportés). À considérer si exposition prolongée en zone d'éclosion active.`;
+    if(age!=null && age>=65) return `<strong>≥ 65 ans :</strong> évaluation bénéfice/risque (effets indésirables graves rapportés${rg.cardio?', en particulier en présence d\'une cardiopathie':''}). À considérer si exposition prolongée en zone d'éclosion active.`;
     return `<strong>Adulte 18-64 ans :</strong> <em>Ixchiq</em> 1 dose SC (0,5 mL) ≥ 28 j avant le départ. Indiqué pour voyageurs en zone d'éclosion active ou exposition prolongée.`;
+  },
   },
 
   /* ------------------- ROUGEOLE / RRO (Partie 4) ------------------- */
