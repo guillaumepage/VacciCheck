@@ -1339,7 +1339,7 @@ const CHIK_RISK = new Set([
   'fidji','samoa','tonga','vanuatu','papouasie-nouvelle-guinee','iles-cook','polynesie-francaise','nouvelle-caledonie'
 ]);
 function chikBlock(slug, inspqText){
-  const ck_in_db = !CHIK_RISK.has(slug);
+  // (V44 — cleanup : variable ck_in_db retirée, jamais utilisée)
   // If neither static list nor DB has chikungunya for the country, no card.
   if(!CHIK_RISK.has(slug) && !inspqText) return null;
   const _inspq = inspqText || '';
