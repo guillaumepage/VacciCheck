@@ -2524,15 +2524,19 @@ DECISION_TREES['Choléra'] = function(ctx){
   const humanitarianContext = rg.humanitaire===true || rg.sante===true;
   const noSafeWater = rg.waterRisk===true;
   const gastric = rg.gastric===true;
-  const eligibleForConsideration = (humanitarianContext && noSafeWater) || gastric;
+  // V44 — fix #6 : éclosion active reconnaît personnel santé seul (PIQ § Choléra, groupes particuliers)
+  const isOutbreakChol = /éclosion|épidémie|hausse/i.test(txt);
+  const healthcareOutbreak = (rg.sante===true && isOutbreakChol);
+  const eligibleForConsideration = (humanitarianContext && noSafeWater) || gastric || healthcareOutbreak;
 
   if(eligibleForConsideration){
     const motifs = [];
     if(humanitarianContext && noSafeWater) motifs.push('contact étroit population indigente sans accès eau potable');
+    if(healthcareOutbreak && !(humanitarianContext && noSafeWater)) motifs.push('personnel de santé en zone d\'éclosion active de choléra (V44)');
     if(gastric) motifs.push('défenses gastriques amoindries');
     cat = ` <br><strong>À envisager</strong> — choléra présent dans le pays + ${motifs.join(' ; ')}.`;
   } else {
-    cat = ` <br><strong>Non requis par défaut</strong> — choléra présent mais voyageur sans contact étroit population indigente isolée OU sans défenses gastriques amoindries. <em>Réévaluer si conditions changent (humanitaire, coopérant santé, eau non potable, IPP/anti-H₂/gastrectomie).</em>`;
+    cat = ` <br><strong>Non requis par défaut</strong> — choléra présent mais voyageur sans contact étroit population indigente isolée OU sans défenses gastriques amoindries. <em>Réévaluer si conditions changent (humanitaire, coopérant santé, éclosion active, eau non potable, IPP/anti-H₂/gastrectomie).</em>`;
   }
 
   // Posologie (statut vaccinal)
