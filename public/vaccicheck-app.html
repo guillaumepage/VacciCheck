@@ -1490,14 +1490,16 @@ function particularGroupsMatch(disease, rg, age, inspqText, country){
       if(rg.asplenie) motifs.push('asplénie / déficit en complément');
     }
   } else if(disease==='Influenza'){
-    if(age!=null && age>=75) motifs.push('≥ 75 ans (risque élevé de complications)');
-    else if(age!=null && age>=65) motifs.push('65-74 ans');
+    if(age!=null && age>=75) motifs.push('≥ 75 ans (risque élevé de complications — privilégier Fluzone HD ou Fluad/Fluad Quad)');
+    else if(age!=null && age>=65) motifs.push('65-74 ans (privilégier Fluzone HD ou Fluad/Fluad Quad si disponible)');
     if(rg.grossesse) motifs.push('grossesse (2ᵉ/3ᵉ trimestre, ou tout stade si condition médicale)');
     if(rg.immuno) motifs.push('immunosuppression / déficit immunitaire');
     if(rg.asplenie) motifs.push('asplénie / hémoglobinopathie');
     if(rg.hepatique) motifs.push('maladie hépatique chronique');
     if(rg.renale) motifs.push('maladie rénale chronique');
     if(rg.diabete) motifs.push('diabète');
+    if(rg.cardio) motifs.push('cardiopathie chronique (V44)');
+    if(rg.pulmonaire) motifs.push('pneumopathie chronique — asthme modéré/sévère, MPOC, FK (V44)');
     if(rg.sante) motifs.push('travailleur de la santé');
     if(rg.humanitaire) motifs.push('contexte humanitaire / contacts étroits avec populations à risque');
     if(age!=null && age<0.5) { /* <6 mois : pas indiqué */ }
