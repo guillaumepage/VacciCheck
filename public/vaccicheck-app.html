@@ -1820,16 +1820,22 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     const isWastewaterP = /eaux usées|détection.*environnement/i.test(tP);
     const isEliminatedP = /éliminée|aucun risque|pas de transmission/i.test(tP) || !(isWildP||isVDPV2||isWastewaterP);
     const sinceP = sP.yearsSinceLast;
+    // V44 — fix #3 : primovaccination pédiatrique complète = 4 doses (2-4-6-18 mois) + rappel 4-6 ans
     if(age!=null && age<18 && sP.count<4){
-      return {status:'Recommandé', msg:'Primo-immunisation pour mineurs. '+inspqText, urgent:false};
+      return {status:'Recommandé', msg:'Primovaccination pédiatrique requise (calendrier régulier : 2, 4, 6 et 18 mois + rappel 4-6 ans). '+inspqText, urgent:false};
     }
-    // Mineurs avec primovaccination complète : aucun rappel adulte requis
-    // (le rappel polio voyage est recommandé uniquement ≥ 18 ans)
-    if(age!=null && age<18 && sP.count>=3){
-      return {status:'Complet', msg:"Primovaccination complète chez mineur — aucun rappel voyage requis (le rappel polio voyage est recommandé pour les ≥ 18 ans). "+inspqText, urgent:false};
+    if(age!=null && age<18 && sP.count>=4){
+      const hasBoosterP = sP.hasDoseAfterAge(4);
+      return {status: hasBoosterP?'Complet':'Incomplet',
+        msg:(hasBoosterP?'Primovaccination + rappel 4-6 ans complétés — aucun rappel voyage requis avant 18 ans.':'Primovaccination (4 doses) complétée mais rappel 4-6 ans non encore reçu — à administrer dès que l\'âge le permet.')+' '+inspqText,
+        urgent:false};
     }
+    // V44 — fix #4 : si pays "éliminée" mais aucun marqueur explicite, signaler l'absence d'information
     if(isEliminatedP && sP.count>=3){
-      return {status:'Complet', msg:'Primovaccination complète et polio éliminée dans ce pays — aucun rappel adulte requis. '+inspqText, urgent:false};
+      const explicit = /éliminée|aucun risque|pas de transmission/i.test(tP);
+      return {status:'Complet',
+        msg:(explicit?'Primovaccination complète et polio éliminée dans ce pays — aucun rappel adulte requis.':'Primovaccination complète. <em>Aucun marqueur de polio détecté dans le texte INSPQ pour ce pays — vérifier la fiche pays manuellement.</em>')+' '+inspqText,
+        urgent:false};
     }
     if((isWildP||isVDPV2) && sP.count>=3 && sinceP!=null && sinceP<=10){
       return {status:'Complet', msg:`Primovaccination complète (dernière dose il y a ${sinceP.toFixed(1)} an(s)) — protection en cours. `+inspqText, urgent:false};
