@@ -1498,8 +1498,8 @@ function particularGroupsMatch(disease, rg, age, inspqText, country){
     if(rg.hepatique) motifs.push('maladie hépatique chronique');
     if(rg.renale) motifs.push('maladie rénale chronique');
     if(rg.diabete) motifs.push('diabète');
-    if(rg.cardio) motifs.push('cardiopathie chronique (V44)');
-    if(rg.pulmonaire) motifs.push('pneumopathie chronique — asthme modéré/sévère, MPOC, FK (V44)');
+    if(rg.cardio) motifs.push('cardiopathie chronique');
+    if(rg.pulmonaire) motifs.push('pneumopathie chronique — asthme modéré/sévère, MPOC, FK');
     if(rg.sante) motifs.push('travailleur de la santé');
     if(rg.humanitaire) motifs.push('contexte humanitaire / contacts étroits avec populations à risque');
     if(age!=null && age<0.5) { /* <6 mois : pas indiqué */ }
@@ -2531,7 +2531,7 @@ DECISION_TREES['Choléra'] = function(ctx){
   if(eligibleForConsideration){
     const motifs = [];
     if(humanitarianContext && noSafeWater) motifs.push('contact étroit population indigente sans accès eau potable');
-    if(healthcareOutbreak && !(humanitarianContext && noSafeWater)) motifs.push('personnel de santé en zone d\'éclosion active de choléra (V44)');
+    if(healthcareOutbreak && !(humanitarianContext && noSafeWater)) motifs.push('personnel de santé en zone d\'éclosion active de choléra');
     if(gastric) motifs.push('défenses gastriques amoindries');
     cat = ` <br><strong>À envisager</strong> — choléra présent dans le pays + ${motifs.join(' ; ')}.`;
   } else {
