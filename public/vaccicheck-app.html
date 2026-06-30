@@ -1229,9 +1229,11 @@ function isDoseCountFor(antigen){
     return false;
   }).length;
 }
-// Compte fractionnaire — Twinrix adulte (1 mL) = 1 dose HB mais 0,5 dose HA (720 U)
-// EXCEPTION : 3 doses Twinrix adulte au schéma 0-1-6 mois = série HA+HB complète (PIQ).
-// Twinrix Junior (0,5 mL) = 1 dose HA pédiatrique mais 0,5 dose HB.
+// Composition réelle (PIQ HAHB) :
+//   Twinrix adultes 1,0 mL : 720 U HA + 20 µg HBsAg  → ½ dose HA adulte (Havrix=1440U) + 1 dose HB adulte (Engerix-B=20µg)
+//   Twinrix Junior 0,5 mL  : 360 U HA + 10 µg HBsAg  → ½ dose HA pédiatrique (Havrix Junior=720U) + 1 dose HB pédiatrique (Engerix-B Péd=10µg)
+// EXCEPTION PIQ : 3 doses de Twinrix au schéma 0-1-6 mois = série HA+HB complète
+// (cumul ≥ 1080 U HA jugé équivalent à la primovaccination HA), valable pour Twinrix adulte ET Junior.
 function effectiveDoseCount(targetAntigen){
   let n = 0;
   let twinrixAdult = 0, twinrixJunior = 0;
@@ -1242,13 +1244,14 @@ function effectiveDoseCount(targetAntigen){
     }
   });
   if(targetAntigen==='Hépatite A'){
-    // 3 doses Twinrix adulte = série HA complète selon PIQ (schéma 0-1-6)
+    // 3 doses Twinrix (adulte ou Junior) = série HA complète (PIQ schéma 0-1-6)
     if(twinrixAdult>=3) n += 2;
     else n += twinrixAdult * 0.5;
-    n += twinrixJunior; // 1 dose HA pédiatrique par Junior
+    if(twinrixJunior>=3) n += 2;
+    else n += twinrixJunior * 0.5;
   } else if(targetAntigen==='Hépatite B'){
-    n += twinrixAdult; // 1 dose HB par Twinrix adulte
-    n += twinrixJunior * 0.5;
+    // Chaque Twinrix (adulte ou Junior) = 1 dose HB complète pour son groupe d'âge
+    n += twinrixAdult + twinrixJunior;
   }
   return n;
 }
