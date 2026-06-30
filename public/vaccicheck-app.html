@@ -1576,7 +1576,7 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     const isTous = (inspqClass==='tous'||inspqClass==='requis');
     if(haEff>=2){ status='Complet'; msg='Série complète déjà reçue (≥ 2 doses équivalentes). Aucune dose supplémentaire requise.'; }
     else if(haEff>0){
-      const twNote = allTwinrix ? `Note : les doses de Twinrix adulte (1 mL) ne contiennent que 720 U d'antigène HA (½ dose adulte). Il manque 1 dose HA junior (0,5 mL) ou 1 Twinrix adulte pour compléter la série Hépatite A. ` : '';
+      const twNote = allTwinrix ? `Note : chaque Twinrix (adulte 720 U HA / Junior 360 U HA) ne fournit que <strong>½ dose HA</strong> ; il faut 3 doses de Twinrix au schéma 0-1-6 mois pour considérer la série Hépatite A complète (PIQ), ou compléter par 1 dose de vaccin monovalent HA. ` : '';
       status = isTous ? 'Recommandé' : 'À considérer';
       msg=`${String(haEff).replace('.',',')} dose(s) équivalente(s) au dossier. ${twNote}2e dose recommandée ≥ 6 mois après la 1re. Contexte pays : `+inspqText;
     }
