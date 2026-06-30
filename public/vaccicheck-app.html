@@ -1982,7 +1982,7 @@ const DECISION_TREES = {
         // Adulte immunocompétent
         doseLbl = "<strong>0,5 mL Havrix ou 0,5 mL Vaqta ou 0,5 mL (80 U) Avaxim</strong> (2e dose adulte = demi-dose ; si la séquence est inversée — 1re demi-dose puis 2e dose complète — aucune dose additionnelle n'est requise)";
       }
-      const twNote = allTwinrixHA ? ` <br><em>Twinrix adulte (1 mL) = ½ dose HA (720 U) :</em> compléter au choix par (a) 1 dose Hépatite A monovalente (0,5 mL Havrix Junior / Vaqta / Avaxim Péd) <strong>ou</strong> (b) 1 Twinrix adulte additionnel pour atteindre <strong>3 doses Twinrix adulte au total = série HA+HB complète</strong> (PIQ).` : '';
+      const twNote = allTwinrixHA ? ` <br><em>Twinrix (adulte 720 U HA / Junior 360 U HA) = ½ dose HA :</em> compléter au choix par (a) 1 dose Hépatite A monovalente (0,5 mL Havrix Junior / Vaqta / Avaxim Péd) <strong>ou</strong> (b) atteindre <strong>3 doses de Twinrix au schéma 0-1-6 mois = série HA+HB complète</strong> (PIQ, valable Twinrix adulte ou Junior).` : '';
       let txt = (since!=null && since<6/12)
         ? `<strong>${effectiveCount} dose(s) équivalente(s) reçue(s), la plus récente il y a ${since.toFixed(1)} an.</strong> Administrer la prochaine dose ≥ 6 mois après (intervalle minimal 5 mois) — ${doseLbl}.${twNote}`
         : `<strong>${effectiveCount} dose(s) équivalente(s) au dossier.</strong> Administrer la prochaine dose maintenant (intervalle ≥ 6 mois respecté) — ${doseLbl}. Protection durable après 2 doses.${twNote}`;
