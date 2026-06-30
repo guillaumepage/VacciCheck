@@ -1590,10 +1590,11 @@ function recommendForDisease(disease, inspqText, inspqClass, rg, age){
     const hbEff = effectiveDoseCount('Hépatite B');
     const nbTwinrixB = state.vaccineEntries.filter(e=>e.antigen==='Hépatite A+B').length;
     const allTwinrixB = nbTwinrixB>0 && nbTwinrixB===hbStats.count;
-    // Règle pédiatrique : 1-19 ans + ≥ 2 doses de HB (0,5 mL) = complet
+    // Règle pédiatrique PIQ : 1-10 ans → 3 doses requises (schéma 0-1-6) ; 11-19 ans en santé → 2 doses peuvent suffire (Recombivax 10 µg adulte, schéma 0-6).
     const youngHealthyHB = (age!=null && age>=1 && age<=19) && !(rg.immuno || rg.vih || rg.renale);
-    if(youngHealthyHB && hbEff>=2){
-      return {status:'Complet', msg:'1-19 ans, ≥ 2 doses équivalentes de Hépatite B — vaccination considérée complète chez l\'enfant ou adolescent en santé. '+inspqText, urgent:false};
+    const hbPedThreshold = (age!=null && age<11) ? 3 : 2;
+    if(youngHealthyHB && hbEff>=hbPedThreshold){
+      return {status:'Complet', msg:`1-${age<11?'10':'19'} ans, ≥ ${hbPedThreshold} doses équivalentes de Hépatite B — vaccination considérée complète chez l'enfant ou adolescent en santé. `+inspqText, urgent:false};
     }
     const hepbCat=(document.getElementById('q_hepb_categorie')||{}).value || '';
     const isImmunoCtx = rg.immuno || rg.renale || hepbCat==='immuno' || hepbCat==='dialyse' || hepbCat==='greffe';
