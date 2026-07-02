@@ -5,72 +5,56 @@ import { verifyVacciCheckToken } from "@/lib/vaccicheck-gate.functions";
 
 const CONSEILSV_URL = "https://conseilsv.lovable.app";
 const SESSION_KEY = "vc_gate_session";
-
-type GateSession = { sub: string; email: string | null; exp: number };
+const SESSION_MS = 4 * 60 * 60 * 1000;
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  component: GateComponent,
+  component: Gate,
 });
 
-function GateComponent() {
-  const [status, setStatus] = useState<"checking" | "ok" | "denied">("checking");
+function Gate() {
   const verify = useServerFn(verifyVacciCheckToken);
+  const [state, setState] = useState<"checking" | "ok">("checking");
 
   useEffect(() => {
-    const now = Math.floor(Date.now() / 1000);
-    const url = new URL(window.location.href);
-    const incoming = url.searchParams.get("vct");
-
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    if (raw && !incoming) {
-      try {
-        const s = JSON.parse(raw) as GateSession;
-        if (s.exp > now) {
-          setStatus("ok");
+    (async () => {
+      const url = new URL(window.location.href);
+      const token = url.searchParams.get("vct");
+      if (token) {
+        const res = await verify({ data: { token } });
+        if (res.ok) {
+          sessionStorage.setItem(
+            SESSION_KEY,
+            JSON.stringify({ exp: Date.now() + SESSION_MS }),
+          );
+          url.searchParams.delete("vct");
+          window.history.replaceState({}, "", url.toString());
+          setState("ok");
           return;
         }
-      } catch {
-        /* ignore */
       }
-    }
-
-    if (incoming) {
-      verify({ data: { token: incoming } })
-        .then((res) => {
-          if (!res.ok) {
-            redirectToPortal();
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (raw) {
+        try {
+          const { exp } = JSON.parse(raw) as { exp: number };
+          if (Date.now() < exp) {
+            setState("ok");
             return;
           }
-          const session: GateSession = {
-            sub: res.sub,
-            email: res.email,
-            exp: res.exp,
-          };
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-          url.searchParams.delete("vct");
-          window.history.replaceState(
-            {},
-            "",
-            url.pathname + url.search + url.hash,
-          );
-          setStatus("ok");
-        })
-        .catch(() => redirectToPortal());
-      return;
-    }
-
-    redirectToPortal();
+        } catch {
+          /* ignore */
+        }
+      }
+      window.location.replace(CONSEILSV_URL);
+    })();
   }, [verify]);
 
-  if (status === "ok") return <Outlet />;
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <p className="text-sm text-muted-foreground">Vérification de l'accès…</p>
-    </div>
-  );
-}
-
-function redirectToPortal() {
-  window.location.replace(CONSEILSV_URL);
+  if (state !== "ok") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Vérification de l'accès…</p>
+      </div>
+    );
+  }
+  return <Outlet />;
 }
