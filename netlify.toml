@@ -1,0 +1,19 @@
+# Netlify: on ignore le build TanStack/SSR et on publie uniquement
+# l'app VacciCheck statique (HTML autonome dans /public).
+# Cela permet de déployer via GitHub → Netlify sans passer par lovable.app.
+
+[build]
+  command = "echo 'Skip build — static HTML only'"
+  publish = "public"
+
+# Redirige la racine vers la dernière version du carnet
+[[redirects]]
+  from = "/"
+  to = "/test_v45.html"
+  status = 200
+
+# Fallback : toute route inconnue tombe aussi sur V45
+[[redirects]]
+  from = "/*"
+  to = "/test_v45.html"
+  status = 200
