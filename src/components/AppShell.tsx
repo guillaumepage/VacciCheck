@@ -6,7 +6,7 @@ import { Shield, User as UserIcon, LogOut, Users as UsersIcon, Stethoscope } fro
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, signOut } = useAuth();
-  const navigate = useNavigate();
+  
 
   const handleSignOut = async () => {
     await signOut();
