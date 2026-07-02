@@ -1,5 +1,6 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
+
 import { Button } from "@/components/ui/button";
 import { Shield, User as UserIcon, LogOut, Users as UsersIcon, Stethoscope } from "lucide-react";
 
