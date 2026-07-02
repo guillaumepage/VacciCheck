@@ -1,7 +1,7 @@
 // Gate d'accès pour VacciCheck déployé sur Netlify.
 // - Accepte ?vct=<token HMAC> émis par ConseilSV (même secret que verifyVacciCheckToken)
 // - Sinon vérifie le cookie de session vc_session (valide 4h)
-// - Sinon redirige vers https://conseilsv.lovable.app
+// - Sinon redirige vers https://conseilsv.netlify.app/
 //
 // Variable d'environnement Netlify requise : VACCICHECK_GATE_SECRET
 // (identique à celle du projet VacciCheck côté Lovable Cloud).
