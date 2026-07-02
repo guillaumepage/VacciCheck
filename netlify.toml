@@ -1,10 +1,15 @@
-# Netlify: on ignore le build TanStack/SSR et on publie uniquement
+# Netlify : on ignore le build TanStack/SSR et on publie uniquement
 # l'app VacciCheck statique (HTML autonome dans /public).
-# Cela permet de déployer via GitHub → Netlify sans passer par lovable.app.
+# L'accès est protégé par une Edge Function (gate.ts) qui vérifie le
+# token HMAC émis par ConseilSV.
 
 [build]
   command = "echo 'Skip build — static HTML only'"
   publish = "public"
+
+[[edge_functions]]
+  path = "/*"
+  function = "gate"
 
 # Redirige la racine vers la dernière version du carnet
 [[redirects]]
