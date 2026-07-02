@@ -14,11 +14,11 @@
 # Redirige la racine vers la dernière version du carnet
 [[redirects]]
   from = "/"
-  to = "/test_v45.html"
+  to = "/test_v46.html"
   status = 200
 
-# Fallback : toute route inconnue tombe aussi sur V45
+# Fallback : toute route inconnue tombe aussi sur V46
 [[redirects]]
   from = "/*"
-  to = "/test_v45.html"
+  to = "/test_v46.html"
   status = 200

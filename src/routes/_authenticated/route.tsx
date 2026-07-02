@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { verifyVacciCheckToken } from "@/lib/vaccicheck-gate.functions";
 
-const CONSEILSV_URL = "https://conseilsv.lovable.app";
+const CONSEILSV_URL = "https://conseilsv.netlify.app/";
 const SESSION_KEY = "vc_gate_session";
 const SESSION_MS = 4 * 60 * 60 * 1000;
 
