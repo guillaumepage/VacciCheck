@@ -17,13 +17,17 @@ import { Loader2, Mail, ShieldOff, ShieldCheck, Search } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw redirect({ to: "/auth" });
+    if (!user) {
+      window.location.replace("https://conseilsv.lovable.app");
+      throw redirect({ to: "/" });
+    }
     const { data } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
     if (!data) throw redirect({ to: "/" });
   },
   component: AdminPage,
   head: () => ({ meta: [{ title: "Administration — VaxConseil" }] }),
 });
+
 
 function AdminPage() {
   const qc = useQueryClient();

@@ -1,16 +1,19 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
+
 import { Button } from "@/components/ui/button";
 import { Shield, User as UserIcon, LogOut, Users as UsersIcon, Stethoscope } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, signOut } = useAuth();
-  const navigate = useNavigate();
+  
 
   const handleSignOut = async () => {
     await signOut();
-    navigate({ to: "/auth", replace: true });
+    sessionStorage.removeItem("vc_gate_session");
+    window.location.replace("https://conseilsv.lovable.app");
   };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
