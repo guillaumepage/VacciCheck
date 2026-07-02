@@ -45,7 +45,7 @@ function GateComponent() {
           const session: GateSession = {
             sub: res.sub,
             email: res.email,
-            exp: res.sessionExp,
+            exp: res.exp,
           };
           sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
           url.searchParams.delete("vct");
