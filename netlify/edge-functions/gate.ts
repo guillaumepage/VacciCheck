@@ -8,7 +8,7 @@
 
 import type { Context } from "https://edge.netlify.com";
 
-const PORTAL_URL = "https://conseilsv.lovable.app";
+const PORTAL_URL = "https://conseilsv.netlify.app";
 const COOKIE_NAME = "vc_session";
 const SESSION_SECONDS = 4 * 60 * 60;
 
