@@ -9,8 +9,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate({ to: "/auth", replace: true });
+    sessionStorage.removeItem("vc_gate_session");
+    window.location.replace("https://conseilsv.lovable.app");
   };
+
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
